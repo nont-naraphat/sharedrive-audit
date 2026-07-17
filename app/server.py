@@ -66,14 +66,19 @@ app = FastAPI(title="Shared Drive Audit", lifespan=lifespan)
 @app.get("/api/status")
 def status():
     data_path = os.path.join(CFG["out"], "audit.json")
-    return {**STATE, "hasData": os.path.exists(data_path), "cron": CFG["cron"]}
+    job = scheduler.get_job("nightly-audit")
+    next_sync = None
+    if job and job.next_run_time:
+        next_sync = job.next_run_time.isoformat(timespec="seconds")
+    return {**STATE, "hasData": os.path.exists(data_path),
+            "cron": CFG["cron"], "next_sync": next_sync}
 
 
 @app.get("/api/audit")
 def get_audit():
     path = os.path.join(CFG["out"], "audit.json")
     if not os.path.exists(path):
-        raise HTTPException(404, "ยังไม่มีข้อมูล — กด Refresh เพื่อ crawl ครั้งแรก")
+        raise HTTPException(404, "ยังไม่มีข้อมูล — กด Sync เพื่อดึงข้อมูลครั้งแรก")
     return FileResponse(path, media_type="application/json")
 
 
@@ -81,7 +86,7 @@ def get_audit():
 def export_xlsx():
     path = os.path.join(CFG["out"], "audit.xlsx")
     if not os.path.exists(path):
-        raise HTTPException(404, "ยังไม่มีไฟล์ export — กด Refresh ก่อน")
+        raise HTTPException(404, "ยังไม่มีไฟล์ export — กด Sync ก่อน")
     return FileResponse(
         path,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -94,7 +99,7 @@ def refresh(bg: BackgroundTasks):
     if not CFG["admin"]:
         raise HTTPException(400, "ยังไม่ตั้ง ADMIN_EMAIL ใน environment")
     if STATE["running"]:
-        raise HTTPException(409, "กำลัง crawl อยู่แล้ว")
+        raise HTTPException(409, "กำลัง sync อยู่แล้ว")
     bg.add_task(run_audit, CFG["sa_file"], CFG["admin"], CFG["domains"], CFG["out"])
     return {"status": "started"}
 
