@@ -13,7 +13,8 @@ COPY app/ /app/
 ENV OUTPUT_DIR=/data \
     SA_FILE=/secrets/sa.json \
     TZ=Asia/Bangkok \
-    CRAWL_CRON="0 2 * * *"
+    CRAWL_CRON="0 2 * * *" \
+    PYTHONUNBUFFERED=1
 
 EXPOSE 8000
 
