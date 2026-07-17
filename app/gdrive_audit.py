@@ -22,7 +22,6 @@ from googleapiclient.errors import HttpError
 
 FOLDER_MIME = "application/vnd.google-apps.folder"
 
-# scope เดียวก็พอสำหรับ drives/files/permissions (ต้อง authorize ใน Admin console DWD)
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 FILE_FIELDS = (
@@ -163,6 +162,94 @@ def walk_drive(svc, drive_id, drive_name):
 
     items = _list_all_items(svc, drive_id, drive_name)
 
-    # สร้าง node ทุกตัวก่อน
     for f in items:
-        is_folder = f.get("mimeType") ==
+        is_folder = f.get("mimeType") == FOLDER_MIME
+        nodes[f["id"]] = {
+            "id": f["id"],
+            "name": f.get("name", ""),
+            "type": "folder" if is_folder else "file",
+            "mimeType": f.get("mimeType"),
+            "size": int(f["size"]) if f.get("size") else None,
+            "createdTime": f.get("createdTime"),
+            "modifiedTime": f.get("modifiedTime"),
+            "lastModifiedBy": (f.get("lastModifyingUser") or {}).get("emailAddress"),
+            "webViewLink": f.get("webViewLink"),
+            "children": [] if is_folder else None,
+            "_parent": (f.get("parents") or [drive_id])[0],
+        }
+
+    file_count = folder_count = total_size = 0
+    for nid, node in nodes.items():
+        if nid == drive_id:
+            continue
+        parent = nodes.get(node["_parent"], root)
+        if parent.get("children") is None:
+            parent = root
+        parent["children"].append(node)
+        if node["type"] == "folder":
+            folder_count += 1
+        else:
+            file_count += 1
+            if node["size"]:
+                total_size += node["size"]
+
+    def finalize(node, prefix):
+        kids = node.get("children")
+        if not kids:
+            return
+        kids.sort(key=lambda c: (c["type"] != "folder", c["name"].lower()))
+        for c in kids:
+            c["path"] = prefix + "/" + c["name"]
+            c.pop("_parent", None)
+            finalize(c, c["path"])
+
+    finalize(root, drive_name)
+    return root, file_count, folder_count, total_size
+
+
+def audit_all(sa_file, admin_email, internal_domains):
+    """
+    ดึงทั้งโดเมน -> คืน dict พร้อม export/serve
+    {
+      generated, drives:[rootNode...], members:{driveId:[...]}, summary:[...]
+    }
+    """
+    get_svc = _svc_cached(sa_file)
+    admin_svc = get_svc(admin_email)
+
+    result = {"drives": [], "members": {}, "summary": []}
+    drives = list_shared_drives(admin_svc)
+    total = len(drives)
+    print(f"[i] พบ shared drive {total} ตัว", flush=True)
+
+    for i, d in enumerate(drives, 1):
+        drive_id, name = d["id"], d.get("name", "(no name)")
+        print(f"  -> [{i}/{total}] {name}", flush=True)
+        members = list_drive_members(admin_svc, drive_id)
+        result["members"][drive_id] = members
+
+        subject = pick_crawl_subject(members, internal_domains, admin_email)
+        try:
+            svc = get_svc(subject)
+            root, fc, dc, size = walk_drive(svc, drive_id, name)
+            print(f"     ✓ {name}: {fc} ไฟล์ / {dc} โฟลเดอร์", flush=True)
+        except HttpError as e:
+            print(f"     [!] ข้ามการไล่ไฟล์ ({e})", flush=True)
+            root = {"id": drive_id, "name": name, "type": "drive",
+                    "path": name, "children": [], "error": str(e)}
+            fc = dc = size = 0
+
+        root["fileCount"] = fc
+        root["folderCount"] = dc
+        root["totalSize"] = size
+        root["createdTime"] = d.get("createdTime")
+        root["crawledAs"] = subject
+        result["drives"].append(root)
+        result["summary"].append({
+            "drive": name, "driveId": drive_id,
+            "files": fc, "folders": dc, "totalSize": size,
+            "members": len([m for m in members if not m.get("deleted")]),
+            "createdTime": d.get("createdTime"),
+        })
+
+    return result
