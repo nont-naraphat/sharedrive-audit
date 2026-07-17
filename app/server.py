@@ -1,19 +1,9 @@
 """
 server.py — FastAPI: serve frontend + API + scheduler
-
-Endpoints:
-  GET  /api/audit    -> audit.json
-  GET  /api/export   -> audit.xlsx (download)
-  GET  /api/status   -> สถานะ crawl (running/last_run/counts) + hasData
-  POST /api/refresh  -> สั่ง crawl ทันที (background) — 409 ถ้ากำลังรันอยู่
-
-Scheduler: รัน crawl อัตโนมัติตาม env CRAWL_CRON (default 02:00 ทุกคืน)
-
-Config ผ่าน env:
-  ADMIN_EMAIL, INTERNAL_DOMAINS, SA_FILE, OUTPUT_DIR, CRAWL_CRON, RUN_ON_START
 """
 
 import os
+import json
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
@@ -22,7 +12,10 @@ from fastapi.staticfiles import StaticFiles
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from audit_service import run_audit, STATE
+from audit_service import (run_audit, STATE, export_permissions_csv,
+                           PERM_STATE)
+from gdrive_audit import (_svc_cached, list_item_permissions,
+                          pick_crawl_subject, is_external, is_direct, ROLE_TH)
 
 BASE = os.path.dirname(__file__)
 
@@ -106,9 +99,27 @@ def refresh(bg: BackgroundTasks):
     return {"status": "started"}
 
 
-app.mount("/", StaticFiles(directory=os.path.join(BASE, "static"), html=True), name="static")
+# cache service factory + members map (สำหรับ per-item permissions)
+_svc = _svc_cached(CFG["sa_file"])
+_members_cache = {"mtime": 0, "map": {}}
 
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+def _members_map():
+    """โหลด members ต่อ drive จาก audit.json (cache ตาม mtime)"""
+    path = os.path.join(CFG["out"], "audit.json")
+    if not os.path.exists(path):
+        return {}
+    m = os.path.getmtime(path)
+    if m != _members_cache["mtime"]:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        _members_cache["map"] = data.get("members", {})
+        _members_cache["mtime"] = m
+    return _members_cache["map"]
+
+
+@app.get("/api/permissions")
+def item_permissions(item: str, drive: str):
+    """ดึง permission ของ item เดียวแบบสด (ใช้ตอนคลิกในหน้าเว็บ)"""
+    if not CFG["admin"]:
+        raise
