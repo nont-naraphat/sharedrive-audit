@@ -1,0 +1,16 @@
+# ห้ามขึ้น git เด็ดขาด
+secrets/
+sa.json
+*.json.key
+.env
+
+# ผลลัพธ์ runtime
+data/
+output/*.json
+output/*.xlsx
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/

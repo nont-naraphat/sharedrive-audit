@@ -1,0 +1,25 @@
+services:
+  sharedrive-audit:
+    build: .
+    # ทางเลือก: ถ้า build บน Synology ติดปัญหา DNS ให้ build+push แล้วใช้ image แทน
+    # image: ghcr.io/nont-naraphat/sharedrive-audit:latest
+    container_name: sharedrive-audit
+    restart: unless-stopped
+    ports:
+      - "8091:8000"          # เปิดที่ http://<synology-ip>:8091  (แก้เลขซ้ายได้)
+    environment:
+      ADMIN_EMAIL: "admin@office21sun.com"       # super admin ที่มีสิทธิ์ Manage shared drives
+      INTERNAL_DOMAINS: "office21sun.com,21sunpassion.com,sunsusolution.com"
+      SA_FILE: "/secrets/sa.json"
+      OUTPUT_DIR: "/data"
+      CRAWL_CRON: "0 2 * * *"                     # auto crawl ทุกคืน 02:00
+      RUN_ON_START: "true"                         # crawl อัตโนมัติครั้งแรกถ้ายังไม่มีข้อมูล
+      TZ: "Asia/Bangkok"
+    dns:                        # กันปัญหา DNS ตอน container วิ่ง (เคยเจอบน Synology)
+      - 1.1.1.1
+      - 8.8.8.8
+    volumes:
+      # service account key (read-only) — วางไฟล์ไว้ที่ path นี้บน Synology ก่อน deploy
+      - /volume1/docker/sharedrive-audit/secrets/sa.json:/secrets/sa.json:ro
+      # เก็บ audit.json / audit.xlsx ให้อยู่รอด restart
+      - /volume1/docker/sharedrive-audit/data:/data
