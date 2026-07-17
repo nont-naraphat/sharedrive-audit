@@ -59,7 +59,7 @@
   <span class="meta" id="gen"></span>
   <span class="grow"></span>
   <input type="search" id="q" placeholder="ค้นหาชื่อไฟล์ / โฟลเดอร์…">
-  <button id="refresh" onclick="doRefresh()"><span id="rico">↻</span> <span id="rtxt">Refresh</span></button>
+  <button id="refresh" onclick="doRefresh()"><span id="rico">🔄</span> <span id="rtxt">Sync ตอนนี้</span></button>
   <button id="permbtn" onclick="doPermExport()">🔑 <span id="ptxt">Export Permissions</span></button>
   <button class="primary" onclick="location.href='/api/export'">⬇ Export Excel</button>
 </header>
@@ -87,18 +87,30 @@ async function refreshStatus(){
     if(s.running){
       btn.disabled=true;
       document.getElementById('rico').outerHTML='<span class="spin" id="rico"></span>';
-      document.getElementById('rtxt').textContent='กำลัง crawl…';
+      document.getElementById('rtxt').textContent='กำลัง sync…';
       if(!polling) polling=setInterval(pollDone,3000);
     }else{
       btn.disabled=false;
-      const ic=document.getElementById('rico'); if(ic) ic.outerHTML='<span id="rico">↻</span>';
-      document.getElementById('rtxt').textContent='Refresh';
+      const ic=document.getElementById('rico'); if(ic) ic.outerHTML='<span id="rico">🔄</span>';
+      document.getElementById('rtxt').textContent='Sync ตอนนี้';
     }
     const g=document.getElementById('gen');
-    if(s.last_error) g.innerHTML=`<span style="color:#c0392b">ครั้งล่าสุด error: ${esc(s.last_error)}</span>`;
-    else if(s.last_run) g.textContent='อัปเดต: '+fmtDate(s.last_run)+'  ·  auto ทุกคืน ('+esc(s.cron)+')';
+    const sched='ซิงค์อัตโนมัติ '+cronText(s.cron);
+    const last=s.last_run?('ล่าสุด '+fmtDate(s.last_run)):'ยังไม่เคยซิงค์';
+    const next=s.next_sync?(' · ครั้งถัดไป '+fmtDate(s.next_sync)):'';
+    if(s.last_error) g.innerHTML=`<span style="color:#c0392b">ซิงค์ล่าสุด error: ${esc(s.last_error)}</span> · ${esc(sched)}`;
+    else g.innerHTML=`⏱️ ${esc(sched)} · ${esc(last)}${esc(next)}`;
     return s;
   }catch(e){ return {}; }
+}
+
+function cronText(cron){
+  if(!cron) return '';
+  const p=cron.trim().split(/\s+/);
+  if(p.length===5 && p[2]==='*' && p[3]==='*' && p[4]==='*' && /^\d+$/.test(p[0]) && /^\d+$/.test(p[1])){
+    return `ทุกวัน ${p[1].padStart(2,'0')}:${p[0].padStart(2,'0')} น.`;
+  }
+  return `(${cron})`;
 }
 
 async function pollDone(){
@@ -108,7 +120,7 @@ async function pollDone(){
 
 async function doRefresh(){
   const r=await fetch('/api/refresh',{method:'POST'});
-  if(r.status===409){ alert('กำลัง crawl อยู่แล้ว'); return; }
+  if(r.status===409){ alert('กำลัง sync อยู่แล้ว'); return; }
   if(!r.ok){ const e=await r.json().catch(()=>({})); alert('เริ่มไม่ได้: '+(e.detail||r.status)); return; }
   await refreshStatus();
 }
@@ -117,8 +129,8 @@ async function loadData(){
   const r=await fetch('/api/audit');
   if(!r.ok){
     document.getElementById('tree').innerHTML=
-      '<div class="empty">ยังไม่มีข้อมูล<br>กด <b>Refresh</b> เพื่อ crawl ครั้งแรก'+
-      '<br><button class="primary" onclick="doRefresh()">↻ Crawl เลย</button></div>';
+      '<div class="empty">ยังไม่มีข้อมูล<br>กด <b>Sync ตอนนี้</b> เพื่อดึงข้อมูลครั้งแรก'+
+      '<br><button class="primary" onclick="doRefresh()">🔄 Sync เลย</button></div>';
     document.getElementById('chips').innerHTML='';
     return;
   }
