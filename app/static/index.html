@@ -8,7 +8,7 @@
     --accent:#2f7d4f; --accentbg:#e8f3ec; --hover:#f0f2f4; --chip:#eef1f4;
     --folder:#4a7bd0; --file:#8a94a0; --drive:#2f7d4f; --warn:#9a6700;
     --r-organizer:#8250df; --r-fileOrganizer:#0969da; --r-writer:#1a7f37;
-    --r-commenter:#9a6700; --r-reader:#6a737d;
+    --r-commenter:#9a6700; --r-reader:#6a737d; --r-owner:#8250df;
   }
   *{box-sizing:border-box}
   body{margin:0;font:14px/1.45 -apple-system,Segoe UI,Roboto,"Noto Sans Thai",Arial,sans-serif;color:var(--ink);background:var(--bg)}
@@ -16,7 +16,7 @@
   header h1{font-size:16px;margin:0;font-weight:650}
   header .meta{color:var(--mut);font-size:12px}
   header .grow{flex:1}
-  input[type=search]{border:1px solid var(--line);border-radius:8px;padding:7px 11px;width:230px;font:inherit}
+  input[type=search]{border:1px solid var(--line);border-radius:8px;padding:7px 11px;width:210px;font:inherit}
   button{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:7px 13px;font:inherit;cursor:pointer;color:var(--ink);display:inline-flex;align-items:center;gap:6px}
   button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
   button:hover{background:var(--hover)} button.primary:hover{filter:brightness(1.05)}
@@ -60,6 +60,7 @@
   <span class="grow"></span>
   <input type="search" id="q" placeholder="ค้นหาชื่อไฟล์ / โฟลเดอร์…">
   <button id="refresh" onclick="doRefresh()"><span id="rico">↻</span> <span id="rtxt">Refresh</span></button>
+  <button id="permbtn" onclick="doPermExport()">🔑 <span id="ptxt">Export Permissions</span></button>
   <button class="primary" onclick="location.href='/api/export'">⬇ Export Excel</button>
 </header>
 
@@ -136,7 +137,8 @@ function renderChips(){
     `<span class="chip">รวม <b>${humanSize(sz)}</b></span>`;
 }
 
-function nodeHTML(n){
+function nodeHTML(n, driveId){
+  driveId = driveId || n.id;
   const kids=n.children&&n.children.length;
   const twist=(n.type==='drive'||n.type==='folder')?`<span class="tw">${kids?'▸':''}</span>`:`<span class="tw"></span>`;
   let cnt=n.type==='drive'?`<span class="cnt">${n.fileCount||0} ไฟล์ · ${n.folderCount||0} โฟลเดอร์</span>`:'';
@@ -144,19 +146,19 @@ function nodeHTML(n){
   li.innerHTML=`<div class="node"><span class="ic ${n.type}">${icon(n.type)}</span></div>`;
   li.querySelector('.node').insertAdjacentHTML('afterbegin',twist);
   li.querySelector('.node').insertAdjacentHTML('beforeend',`<span class="nm">${esc(n.name)}</span>${cnt}`);
-  const nodeEl=li.querySelector('.node');nodeEl._data=n;
+  const nodeEl=li.querySelector('.node');nodeEl._data=n;nodeEl._drive=driveId;
   nodeEl.onclick=e=>{e.stopPropagation();selectNode(nodeEl,n);toggle(li,n);};
-  if(kids){const ul=document.createElement('ul');ul.className='t hidden';n.children.forEach(c=>ul.appendChild(nodeHTML(c)));li.appendChild(ul);}
+  if(kids){const ul=document.createElement('ul');ul.className='t hidden';n.children.forEach(c=>ul.appendChild(nodeHTML(c,driveId)));li.appendChild(ul);}
   return li;
 }
 function toggle(li,n){if(!(n.children&&n.children.length))return;const ul=li.querySelector('ul'),tw=li.querySelector('.tw');const open=!ul.classList.contains('hidden');ul.classList.toggle('hidden',open);tw.textContent=open?'▸':'▾';}
-function renderTree(){const root=document.createElement('ul');root.className='t root';(DATA.drives||[]).forEach(d=>root.appendChild(nodeHTML(d)));const c=document.getElementById('tree');c.innerHTML='';c.appendChild(root);}
+function renderTree(){const root=document.createElement('ul');root.className='t root';(DATA.drives||[]).forEach(d=>root.appendChild(nodeHTML(d,d.id)));const c=document.getElementById('tree');c.innerHTML='';c.appendChild(root);}
 
 let selEl=null;
-function selectNode(el,n){if(selEl)selEl.classList.remove('sel');el.classList.add('sel');selEl=el;renderDetail(n);}
+function selectNode(el,n){if(selEl)selEl.classList.remove('sel');el.classList.add('sel');selEl=el;renderDetail(n,el._drive);}
 function roleBadge(role){const c=(getComputedStyle(document.documentElement).getPropertyValue('--r-'+role)||'#6a737d').trim();return `<span class="role" style="background:${c}">${esc(role)}</span>`;}
 
-function renderDetail(n){
+function renderDetail(n, driveId){
   const d=document.getElementById('detail');
   let kv=`<div class="kv"><div class="k">ประเภท</div><div class="v">${n.type}</div><div class="k">Path</div><div class="v">${esc(n.path)}</div>`;
   if(n.type!=='drive'){
@@ -166,15 +168,37 @@ function renderDetail(n){
     kv+=`<div class="k">ไฟล์ทั้งหมด</div><div class="v">${n.fileCount||0}</div><div class="k">โฟลเดอร์ย่อย</div><div class="v">${n.folderCount||0}</div><div class="k">ขนาดรวม</div><div class="v">${humanSize(n.totalSize)}</div><div class="k">สร้างเมื่อ</div><div class="v">${fmtDate(n.createdTime)}</div><div class="k">ไล่ไฟล์โดย</div><div class="v">${esc(n.crawledAs)||'—'}</div>`;
   }
   kv+=`</div>`;
-  let members='';
+  d.innerHTML=`<h2>${icon(n.type)} ${esc(n.name)}</h2><div class="sub">${esc(n.id)}</div>${kv}<div id="perms"></div>`;
+
+  const pv=document.getElementById('perms');
   if(n.type==='drive'){
     const order={organizer:0,fileOrganizer:1,writer:2,commenter:3,reader:4};
     const ms=(MEMBERS[n.id]||[]).filter(m=>!m.deleted).sort((a,b)=>(order[a.role]??9)-(order[b.role]??9));
-    members=`<div class="mtitle">Members / Permission (${ms.length})</div>`;
-    if(!ms.length)members+=`<div class="sub">ไม่มีข้อมูล member</div>`;
-    ms.forEach(m=>{members+=`<div class="mrow"><div class="who"><div class="em">${esc(m.emailAddress||m.domain||m.type)}</div>${m.displayName?`<div class="dn">${esc(m.displayName)}</div>`:''}</div>${roleBadge(m.role||'')}</div>`;});
+    let h=`<div class="mtitle">Members / Permission (${ms.length})</div>`;
+    if(!ms.length)h+=`<div class="sub">ไม่มีข้อมูล member</div>`;
+    ms.forEach(m=>{h+=`<div class="mrow"><div class="who"><div class="em">${esc(m.emailAddress||m.domain||m.type)}</div>${m.displayName?`<div class="dn">${esc(m.displayName)}</div>`:''}</div>${roleBadge(m.role||'')}</div>`;});
+    pv.innerHTML=h;
+  }else{
+    pv.innerHTML=`<div class="mtitle">สิทธิ์การเข้าถึง</div><div class="sub">⏳ กำลังโหลด…</div>`;
+    loadItemPerms(n.id, driveId, pv);
   }
-  d.innerHTML=`<h2>${icon(n.type)} ${esc(n.name)}</h2><div class="sub">${esc(n.id)}</div>${kv}${members}`;
+}
+
+async function loadItemPerms(itemId, driveId, pv){
+  try{
+    const r=await fetch(`/api/permissions?item=${encodeURIComponent(itemId)}&drive=${encodeURIComponent(driveId)}`);
+    if(!r.ok){pv.innerHTML=`<div class="mtitle">สิทธิ์การเข้าถึง</div><div class="sub">โหลดไม่ได้</div>`;return;}
+    const data=await r.json();
+    const ps=data.permissions||[];
+    let h=`<div class="mtitle">สิทธิ์การเข้าถึง (${ps.length})</div>`;
+    if(!ps.length)h+=`<div class="sub">ใช้สิทธิ์ตาม drive</div>`;
+    ps.forEach(p=>{
+      const ext=p.external?`<span class="role" style="background:#c0392b;margin-left:4px">นอกองค์กร</span>`:'';
+      const inh=p.inherited?'':`<span class="role" style="background:#0969da;margin-left:4px">แชร์ตรง</span>`;
+      h+=`<div class="mrow"><div class="who"><div class="em">${esc(p.email||p.name||p.memberType)}</div><div class="dn">${esc(p.roleTh)} · ${esc(p.memberType)}</div></div><div>${roleBadge(p.role||'')}${inh}${ext}</div></div>`;
+    });
+    pv.innerHTML=h;
+  }catch(e){pv.innerHTML=`<div class="mtitle">สิทธิ์การเข้าถึง</div><div class="sub">โหลดไม่ได้</div>`;}
 }
 
 const q=document.getElementById('q');let tmr;
@@ -196,4 +220,32 @@ function runSearch(){
 }
 
 boot();
+
+let permPoll=null;
+async function doPermExport(){
+  const s=await (await fetch('/api/perm-status')).json();
+  if(s.running){ pollPerm(); return; }
+  if(s.hasFile && !confirm('มีไฟล์ permissions.csv อยู่แล้ว — สร้างใหม่? (ใช้เวลานานกับระบบใหญ่)')){
+    location.href='/api/export-permissions/download'; return;
+  }
+  const r=await fetch('/api/export-permissions',{method:'POST'});
+  if(r.status===409){ pollPerm(); return; }
+  if(!r.ok){ alert('เริ่มไม่ได้'); return; }
+  pollPerm();
+}
+function setPermBtn(txt,dis){document.getElementById('ptxt').textContent=txt;document.getElementById('permbtn').disabled=!!dis;}
+async function pollPerm(){
+  setPermBtn('กำลังดึง permission…',true);
+  if(permPoll) clearInterval(permPoll);
+  permPoll=setInterval(async()=>{
+    const s=await (await fetch('/api/perm-status')).json();
+    if(s.running){ setPermBtn(`ดึงแล้ว ${s.rows.toLocaleString()} แถว…`,true); }
+    else{
+      clearInterval(permPoll); permPoll=null;
+      setPermBtn('Export Permissions',false);
+      if(s.last_error){ alert('error: '+s.last_error); }
+      else if(s.hasFile){ if(confirm(`เสร็จ ${s.rows.toLocaleString()} แถว — ดาวน์โหลดเลยไหม?`)) location.href='/api/export-permissions/download'; }
+    }
+  },3000);
+}
 </script>
