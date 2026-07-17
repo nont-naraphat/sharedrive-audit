@@ -22,7 +22,6 @@ FILE_FIELDS = (
 
 
 def _svc_for(sa_file, subject):
-    """สร้าง Drive service โดย impersonate subject (email ในโดเมน)"""
     creds = service_account.Credentials.from_service_account_file(
         sa_file, scopes=SCOPES, subject=subject
     )
@@ -30,7 +29,6 @@ def _svc_for(sa_file, subject):
 
 
 def _svc_cached(sa_file):
-    """คืน factory ที่ cache service ต่อ subject (กันสร้างซ้ำ)"""
     cache = {}
 
     def get(subject):
@@ -42,7 +40,6 @@ def _svc_cached(sa_file):
 
 
 def _exec(request, max_tries=6):
-    """execute + exponential backoff สำหรับ 403/429/5xx (quota / rate limit)"""
     for i in range(max_tries):
         try:
             return request.execute()
@@ -55,7 +52,6 @@ def _exec(request, max_tries=6):
 
 
 def list_shared_drives(admin_svc):
-    """enumerate ทุก shared drive ในโดเมน"""
     drives = []
     page_token = None
     while True:
@@ -73,7 +69,6 @@ def list_shared_drives(admin_svc):
 
 
 def list_drive_members(admin_svc, drive_id):
-    """member/permission ระดับ drive"""
     members = []
     page_token = None
     while True:
@@ -106,7 +101,6 @@ PERM_FIELDS = ("permissions(id,type,emailAddress,role,displayName,domain,"
 
 
 def is_external(perm, internal_domains):
-    """True ถ้า permission นี้เป็นคนนอกองค์กร (anyone / โดเมนนอก)"""
     if perm.get("type") == "anyone":
         return True
     email = perm.get("emailAddress") or ""
@@ -115,7 +109,6 @@ def is_external(perm, internal_domains):
 
 
 def is_direct(perm):
-    """True ถ้าเป็นสิทธิ์ที่ตั้งบน item นี้โดยตรง (ไม่ได้ inherit)"""
     details = perm.get("permissionDetails")
     if not details:
         return True
@@ -123,7 +116,6 @@ def is_direct(perm):
 
 
 def list_item_permissions(svc, file_id):
-    """ดึง permission ของ item เดียว (ใช้ตอนคลิกในหน้าเว็บ)"""
     perms = []
     page_token = None
     while True:
@@ -142,7 +134,6 @@ def list_item_permissions(svc, file_id):
 
 
 def _list_all_items_with_perms(svc, drive_id, drive_name):
-    """เหมือน _list_all_items แต่ขอ permissions มาด้วย (สำหรับ export CSV)"""
     fields = ("nextPageToken, files(id,name,mimeType,parents,"
               + PERM_FIELDS + ")")
     items = []
@@ -162,7 +153,6 @@ def _list_all_items_with_perms(svc, drive_id, drive_name):
 
 
 def iter_permission_rows(sa_file, admin_email, internal_domains, progress=None):
-    """generator yield แถวสำหรับ CSV: ทุกไฟล์ × ทุก permission ทั้งระบบ"""
     get_svc = _svc_cached(sa_file)
     admin_svc = get_svc(admin_email)
     drives = list_shared_drives(admin_svc)
@@ -221,7 +211,6 @@ def iter_permission_rows(sa_file, admin_email, internal_domains, progress=None):
 
 
 def _list_all_items(svc, drive_id, drive_name):
-    """ดึง 'ทุก' item ใน drive ด้วย query เดียว (paginate ทีละ 1000)"""
     items = []
     page_token = None
     while True:
@@ -244,7 +233,6 @@ def _list_all_items(svc, drive_id, drive_name):
 
 
 def pick_crawl_subject(members, internal_domains, admin_email):
-    """เลือก user ที่จะ impersonate ไปไล่ไฟล์"""
     prio = {"organizer": 0, "fileOrganizer": 1, "writer": 2}
     best = None
     best_rank = 99
@@ -263,7 +251,6 @@ def pick_crawl_subject(members, internal_domains, admin_email):
 
 
 def walk_drive(svc, drive_id, drive_name):
-    """ดึงทุก item ใน drive ครั้งเดียว แล้วประกอบเป็น tree ใน memory"""
     root = {"id": drive_id, "name": drive_name, "type": "drive",
             "path": drive_name, "children": []}
     nodes = {drive_id: root}
@@ -316,7 +303,6 @@ def walk_drive(svc, drive_id, drive_name):
 
 
 def audit_all(sa_file, admin_email, internal_domains):
-    """ดึงทั้งโดเมน -> คืน dict พร้อม export/serve"""
     get_svc = _svc_cached(sa_file)
     admin_svc = get_svc(admin_email)
 
@@ -352,4 +338,7 @@ def audit_all(sa_file, admin_email, internal_domains):
             "drive": name, "driveId": drive_id,
             "files": fc, "folders": dc, "totalSize": size,
             "members": len([m for m in members if not m.get("deleted")]),
-            "createdTime":
+            "createdTime": d.get("createdTime"),
+        })
+
+    return result
