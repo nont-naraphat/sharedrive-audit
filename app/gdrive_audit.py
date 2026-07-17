@@ -27,7 +27,7 @@ SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 FILE_FIELDS = (
     "nextPageToken, files(id,name,mimeType,size,modifiedTime,createdTime,"
-    "lastModifyingUser(displayName,emailAddress),webViewLink,shortcutDetails)"
+    "lastModifyingUser(displayName,emailAddress),webViewLink,shortcutDetails,parents)"
 )
 
 
@@ -102,27 +102,30 @@ def list_drive_members(admin_svc, drive_id):
     return members
 
 
-def _list_children(svc, drive_id, parent_id):
-    q = f"'{parent_id}' in parents and trashed=false"
-    out = []
+def _list_all_items(svc, drive_id, drive_name):
+    """
+    ดึง 'ทุก' item ใน drive ด้วย query เดียว (paginate ทีละ 1000)
+    เร็วกว่าการไล่ทีละโฟลเดอร์มาก: จาก O(folders) call เหลือ O(files/1000)
+    """
+    items = []
     page_token = None
     while True:
         resp = _exec(svc.files().list(
-            q=q,
+            q="trashed=false",
             corpora="drive",
             driveId=drive_id,
             includeItemsFromAllDrives=True,
             supportsAllDrives=True,
             pageSize=1000,
-            orderBy="folder,name",
             fields=FILE_FIELDS,
             pageToken=page_token,
         ))
-        out.extend(resp.get("files", []))
+        items.extend(resp.get("files", []))
+        print(f"       {drive_name}: {len(items)} รายการ…", flush=True)
         page_token = resp.get("nextPageToken")
         if not page_token:
             break
-    return out
+    return items
 
 
 def pick_crawl_subject(members, internal_domains, admin_email):
@@ -151,90 +154,15 @@ def pick_crawl_subject(members, internal_domains, admin_email):
 
 def walk_drive(svc, drive_id, drive_name):
     """
-    ไล่ทั้ง drive แบบ iterative -> คืน (root_node, file_count, folder_count, total_size)
-    root_node เป็น nested tree พร้อม field: type/size/modifiedTime/lastModifiedBy/path/...
+    ดึงทุก item ใน drive ครั้งเดียว แล้วประกอบเป็น tree ใน memory (เร็ว)
+    คืน (root_node, file_count, folder_count, total_size)
     """
-    root = {
-        "id": drive_id, "name": drive_name, "type": "drive",
-        "path": drive_name, "children": [],
-    }
-    stack = [(drive_id, root, drive_name)]
-    file_count = 0
-    folder_count = 0
-    total_size = 0
+    root = {"id": drive_id, "name": drive_name, "type": "drive",
+            "path": drive_name, "children": []}
+    nodes = {drive_id: root}
 
-    while stack:
-        parent_id, parent_node, parent_path = stack.pop()
-        for f in _list_children(svc, drive_id, parent_id):
-            is_folder = f.get("mimeType") == FOLDER_MIME
-            path = parent_path + "/" + f.get("name", "")
-            size = int(f["size"]) if f.get("size") else None
-            node = {
-                "id": f["id"],
-                "name": f.get("name", ""),
-                "type": "folder" if is_folder else "file",
-                "mimeType": f.get("mimeType"),
-                "size": size,
-                "createdTime": f.get("createdTime"),
-                "modifiedTime": f.get("modifiedTime"),
-                "lastModifiedBy": (f.get("lastModifyingUser") or {}).get("emailAddress"),
-                "webViewLink": f.get("webViewLink"),
-                "path": path,
-                "children": [] if is_folder else None,
-            }
-            parent_node["children"].append(node)
-            if is_folder:
-                folder_count += 1
-                stack.append((f["id"], node, path))
-            else:
-                file_count += 1
-                if size:
-                    total_size += size
+    items = _list_all_items(svc, drive_id, drive_name)
 
-    return root, file_count, folder_count, total_size
-
-
-def audit_all(sa_file, admin_email, internal_domains):
-    """
-    ดึงทั้งโดเมน -> คืน dict พร้อม export/serve
-    {
-      generated, drives:[rootNode...], members:{driveId:[...]}, summary:[...]
-    }
-    """
-    get_svc = _svc_cached(sa_file)
-    admin_svc = get_svc(admin_email)
-
-    result = {"drives": [], "members": {}, "summary": []}
-    drives = list_shared_drives(admin_svc)
-    print(f"[i] พบ shared drive {len(drives)} ตัว")
-
-    for d in drives:
-        drive_id, name = d["id"], d.get("name", "(no name)")
-        print(f"  -> {name}")
-        members = list_drive_members(admin_svc, drive_id)
-        result["members"][drive_id] = members
-
-        subject = pick_crawl_subject(members, internal_domains, admin_email)
-        try:
-            svc = get_svc(subject)
-            root, fc, dc, size = walk_drive(svc, drive_id, name)
-        except HttpError as e:
-            print(f"     [!] ข้ามการไล่ไฟล์ ({e})")
-            root = {"id": drive_id, "name": name, "type": "drive",
-                    "path": name, "children": [], "error": str(e)}
-            fc = dc = size = 0
-
-        root["fileCount"] = fc
-        root["folderCount"] = dc
-        root["totalSize"] = size
-        root["createdTime"] = d.get("createdTime")
-        root["crawledAs"] = subject
-        result["drives"].append(root)
-        result["summary"].append({
-            "drive": name, "driveId": drive_id,
-            "files": fc, "folders": dc, "totalSize": size,
-            "members": len([m for m in members if not m.get("deleted")]),
-            "createdTime": d.get("createdTime"),
-        })
-
-    return result
+    # สร้าง node ทุกตัวก่อน
+    for f in items:
+        is_folder = f.get("mimeType") ==
