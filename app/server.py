@@ -99,7 +99,6 @@ def refresh(bg: BackgroundTasks):
     return {"status": "started"}
 
 
-# cache service factory + members map (สำหรับ per-item permissions)
 _svc = _svc_cached(CFG["sa_file"])
 _members_cache = {"mtime": 0, "map": {}}
 
@@ -122,4 +121,60 @@ def _members_map():
 def item_permissions(item: str, drive: str):
     """ดึง permission ของ item เดียวแบบสด (ใช้ตอนคลิกในหน้าเว็บ)"""
     if not CFG["admin"]:
-        raise
+        raise HTTPException(400, "ยังไม่ตั้ง ADMIN_EMAIL")
+    members = _members_map().get(drive, [])
+    subject = pick_crawl_subject(members, CFG["domains"], CFG["admin"])
+    try:
+        svc = _svc(subject)
+        perms = list_item_permissions(svc, item)
+    except Exception as e:  # noqa
+        raise HTTPException(502, f"ดึง permission ไม่ได้: {e}")
+    out = []
+    for p in perms:
+        out.append({
+            "name": p.get("displayName") or p.get("emailAddress") or p.get("type"),
+            "email": p.get("emailAddress"),
+            "memberType": p.get("type"),
+            "role": p.get("role"),
+            "roleTh": ROLE_TH.get(p.get("role", ""), p.get("role", "")),
+            "external": is_external(p, CFG["domains"]),
+            "inherited": not is_direct(p),
+        })
+    order = {"owner": 0, "organizer": 1, "fileOrganizer": 2, "writer": 3,
+             "commenter": 4, "reader": 5}
+    out.sort(key=lambda x: order.get(x["role"], 9))
+    return {"permissions": out}
+
+
+@app.get("/api/perm-status")
+def perm_status():
+    csv_path = os.path.join(CFG["out"], "permissions.csv")
+    return {**PERM_STATE, "hasFile": os.path.exists(csv_path)}
+
+
+@app.post("/api/export-permissions")
+def start_perm_export(bg: BackgroundTasks):
+    if not CFG["admin"]:
+        raise HTTPException(400, "ยังไม่ตั้ง ADMIN_EMAIL")
+    if PERM_STATE["running"]:
+        raise HTTPException(409, "กำลัง export permission อยู่แล้ว")
+    bg.add_task(export_permissions_csv, CFG["sa_file"], CFG["admin"],
+                CFG["domains"], CFG["out"])
+    return {"status": "started"}
+
+
+@app.get("/api/export-permissions/download")
+def download_perm_csv():
+    path = os.path.join(CFG["out"], "permissions.csv")
+    if not os.path.exists(path):
+        raise HTTPException(404, "ยังไม่มีไฟล์ — กด Export Permissions ก่อน")
+    return FileResponse(path, media_type="text/csv",
+                        filename="shared-drive-permissions.csv")
+
+
+app.mount("/", StaticFiles(directory=os.path.join(BASE, "static"), html=True), name="static")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
