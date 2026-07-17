@@ -1,12 +1,10 @@
 """
 audit_service.py — ตัวกลางที่ทั้ง CLI และ API เรียกใช้
-- run_audit(): crawl ทั้งโดเมน -> เขียน audit.json + audit.xlsx
-- STATE: สถานะ crawl (running / last_run / last_error / counts) สำหรับ /api/status
-- write_xlsx(): export Excel 3 sheet
 """
 
 import os
 import json
+import csv
 import threading
 import datetime as dt
 
@@ -14,7 +12,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 
-from gdrive_audit import audit_all
+from gdrive_audit import audit_all, iter_permission_rows
 
 # ---- สถานะ crawl (in-memory) ----
 STATE = {
@@ -27,6 +25,15 @@ STATE = {
     "folders": 0,
 }
 _lock = threading.Lock()
+
+# ---- สถานะ export permission CSV ----
+PERM_STATE = {
+    "running": False,
+    "rows": 0,
+    "last_run": None,
+    "last_error": None,
+}
+_perm_lock = threading.Lock()
 
 
 def human_size(n):
@@ -112,10 +119,7 @@ def write_xlsx(data, path):
 
 
 def run_audit(sa_file, admin_email, internal_domains, out_dir):
-    """
-    รัน crawl ทั้งโดเมน (thread-safe: กันรันซ้อน).
-    คืน dict สรุปผล; อัปเดต STATE ตลอด
-    """
+    """รัน crawl ทั้งโดเมน (thread-safe: กันรันซ้อน)"""
     with _lock:
         if STATE["running"]:
             return {"skipped": True, "reason": "already running"}
@@ -142,3 +146,46 @@ def run_audit(sa_file, admin_email, internal_domains, out_dir):
         raise
     finally:
         STATE["running"] = False
+
+
+PERM_CSV_HEADER = ["Drive", "Path", "Type", "Name", "Item ID", "Member",
+                   "Member Type", "Role", "Role(TH)", "Inherited",
+                   "External", "Domain"]
+
+
+def export_permissions_csv(sa_file, admin_email, internal_domains, out_dir):
+    """ไล่ทุกไฟล์ทั้งระบบ ดึง permission แล้วเขียน permissions.csv (stream ทีละแถว)"""
+    with _perm_lock:
+        if PERM_STATE["running"]:
+            return {"skipped": True}
+        PERM_STATE["running"] = True
+        PERM_STATE["rows"] = 0
+        PERM_STATE["last_error"] = None
+
+    os.makedirs(out_dir, exist_ok=True)
+    tmp = os.path.join(out_dir, "permissions.csv.tmp")
+    final = os.path.join(out_dir, "permissions.csv")
+
+    def _progress(n):
+        PERM_STATE["rows"] = n
+        print(f"     [perms] เขียนแล้ว {n:,} แถว", flush=True)
+
+    try:
+        with open(tmp, "w", newline="", encoding="utf-8-sig") as fh:
+            w = csv.writer(fh)
+            w.writerow(PERM_CSV_HEADER)
+            for row in iter_permission_rows(sa_file, admin_email,
+                                            internal_domains, progress=_progress):
+                w.writerow([row["drive"], row["path"], row["type"], row["name"],
+                            row["item_id"], row["member"], row["member_type"],
+                            row["role"], row["role_th"], row["inherited"],
+                            row["external"], row["domain"]])
+        os.replace(tmp, final)
+        PERM_STATE["last_run"] = dt.datetime.now().isoformat(timespec="seconds")
+        print(f"[✓] permissions.csv เสร็จ ({PERM_STATE['rows']:,} แถว)", flush=True)
+        return {"rows": PERM_STATE["rows"]}
+    except Exception as e:  # noqa
+        PERM_STATE["last_error"] = str(e)
+        raise
+    finally:
+        PERM_STATE["running"] = False
