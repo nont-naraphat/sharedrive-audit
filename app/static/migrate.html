@@ -1,0 +1,165 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Migration Prep — Google → SharePoint</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#fff; --line:#e6e8eb; --ink:#1f2328; --mut:#6a737d;
+    --accent:#2f7d4f; --accentbg:#e8f3ec; --hover:#f0f2f4; --chip:#eef1f4;
+    --block:#c0392b; --blockbg:#f8d7da; --warn:#9a6700; --warnbg:#fff3cd;
+    --ok:#1a7f37; --okbg:#d4edda; --folder:#4a7bd0;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.45 -apple-system,Segoe UI,Roboto,"Noto Sans Thai",Arial,sans-serif;color:var(--ink);background:var(--bg)}
+  header{display:flex;align-items:center;gap:12px;padding:12px 18px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+  header h1{font-size:16px;margin:0;font-weight:650}
+  header .meta{color:var(--mut);font-size:12px}
+  header .grow{flex:1}
+  a.nav{color:var(--mut);text-decoration:none;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:6px 11px}
+  a.nav:hover{background:var(--hover)}
+  button{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:7px 13px;font:inherit;cursor:pointer;color:var(--ink);display:inline-flex;align-items:center;gap:6px}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button:hover{background:var(--hover)} button.primary:hover{filter:brightness(1.05)}
+  button:disabled{opacity:.55;cursor:default}
+  .spin{width:13px;height:13px;border:2px solid #fff6;border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  main{max-width:1040px;margin:0 auto;padding:20px 18px 60px}
+  .note{background:var(--accentbg);border:1px solid #cfe4d6;border-radius:10px;padding:12px 14px;font-size:13px;color:#28603f;margin-bottom:20px}
+  .note b{color:#1c4a30}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin:18px 0 26px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .card .n{font-size:26px;font-weight:700;line-height:1.1}
+  .card .l{font-size:12px;color:var(--mut);margin-top:4px}
+  .card.block .n{color:var(--block)} .card.warn .n{color:var(--warn)} .card.ok .n{color:var(--ok)}
+  h2{font-size:14px;margin:26px 0 10px;font-weight:650}
+  .files{display:grid;gap:10px}
+  .frow{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .frow .ic{font-size:20px}
+  .frow .txt{flex:1}
+  .frow .txt .t{font-weight:600}
+  .frow .txt .d{font-size:12px;color:var(--mut);margin-top:2px}
+  .badge{font-size:11px;padding:2px 9px;border-radius:999px;background:var(--chip);color:var(--mut)}
+  .badge.ready{background:var(--okbg);color:var(--ok)}
+  .empty{color:var(--mut);text-align:center;padding:40px}
+  .err{color:var(--block);font-size:13px;margin-top:8px}
+  code{background:#eef1f4;padding:1px 6px;border-radius:5px;font-size:12px}
+</style>
+
+<header>
+  <h1>🚚 Migration Prep</h1>
+  <span class="meta">Google Shared Drive → SharePoint / M365</span>
+  <span class="grow"></span>
+  <a class="nav" href="/">← กลับหน้า Audit</a>
+  <button class="primary" id="build" onclick="doBuild()"><span id="bico">⚙️</span> <span id="btxt">Build ชุด migration</span></button>
+</header>
+
+<main>
+  <div class="note">
+    เครื่องมือนี้อ่านจากผล audit ล่าสุด (<code>audit.json</code> / <code>permissions.csv</code>)
+    แล้วสร้างไฟล์ช่วย migrate ด้วย <b>Microsoft Migration Manager</b> (ตัวย้ายไฟล์ทางการ ฟรี)
+    — ตัวนี้ <b>ไม่ย้ายไฟล์เอง</b> แต่เตรียม source list, identity map, แผนปลายทาง
+    และสแกนหาสิ่งที่จะย้ายไม่ผ่าน (path ยาว / อักขระต้องห้าม / ไฟล์ใหญ่ / Google native)
+    ให้แก้ก่อน
+  </div>
+
+  <div id="stat" class="empty">กำลังโหลดสถานะ…</div>
+  <div id="err" class="err"></div>
+
+  <div id="cards" class="cards" style="display:none"></div>
+
+  <h2>ไฟล์ผลลัพธ์</h2>
+  <div class="files" id="files"></div>
+</main>
+
+<script>
+const ART = [
+  {key:"source",      ic:"📥", t:"mm_source_paths.csv",  d:"อัปโหลดตรงใน Migration Manager (bulk source list ของ 13 shared drive)"},
+  {key:"identity",    ic:"👤", t:"mm_identity_map.csv",   d:"เทียบ Google identity → M365 UPN (ภายในเดาให้อัตโนมัติ, external ต้องรีวิว)"},
+  {key:"destination", ic:"🗺️", t:"destination_plan.csv",  d:"แผน drive → SharePoint site/library (แก้เองได้ก่อนใช้)"},
+  {key:"readiness",   ic:"🩺", t:"readiness_report.xlsx", d:"รายงานสิ่งที่ต้องแก้ก่อนย้าย: blockers, native files, external shares, sizing"},
+];
+let polling=null;
+
+const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function boot(){ await refresh(); }
+
+async function refresh(){
+  let s;
+  try{ s = await (await fetch('/api/migrate/status')).json(); }
+  catch(e){ document.getElementById('stat').textContent='โหลดสถานะไม่ได้'; return {}; }
+
+  const btn=document.getElementById('build');
+  if(s.running){
+    btn.disabled=true;
+    document.getElementById('bico').outerHTML='<span class="spin" id="bico"></span>';
+    document.getElementById('btxt').textContent='กำลัง build…';
+    if(!polling) polling=setInterval(poll,2500);
+  }else{
+    btn.disabled=false;
+    const ic=document.getElementById('bico'); if(ic) ic.outerHTML='<span id="bico">⚙️</span>';
+    document.getElementById('btxt').textContent='Build ชุด migration';
+  }
+
+  const stat=document.getElementById('stat');
+  if(s.last_run){
+    stat.innerHTML='อัปเดตล่าสุด '+new Date(s.last_run).toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short'})
+      +' · '+ (s.drives||0) +' drive · '+ (s.items||0).toLocaleString() +' รายการ';
+  }else{
+    stat.textContent='ยังไม่เคย build — กดปุ่ม “Build ชุด migration” มุมขวาบน';
+  }
+
+  document.getElementById('err').textContent = s.last_error ? ('error: '+s.last_error) : '';
+
+  const sm=s.summary||{};
+  const cards=document.getElementById('cards');
+  if(s.last_run){
+    cards.style.display='';
+    const defs=[
+      {cls:'block',n:sm.block||0,l:'ต้องแก้ (blocker)'},
+      {cls:'warn', n:sm.warn||0, l:'ต้องระวัง (warning)'},
+      {cls:'block',n:sm.long_path||0,l:'path ยาว > 400'},
+      {cls:'block',n:sm.illegal||0,l:'ชื่อมีอักขระต้องห้าม'},
+      {cls:'block',n:sm.native_block||0,l:'native ที่ไม่ถูกย้าย'},
+      {cls:'warn', n:sm.native_warn||0,l:'native แปลงแบบ lossy'},
+      {cls:'',     n:sm.external||0,l:'external share'},
+      {cls:'',     n:sm.identities||0,l:'identity ทั้งหมด'},
+    ];
+    cards.innerHTML=defs.map(d=>`<div class="card ${d.cls}"><div class="n">${(d.n||0).toLocaleString()}</div><div class="l">${d.l}</div></div>`).join('');
+  }else{
+    cards.style.display='none';
+  }
+
+  renderFiles(s.files||{});
+  return s;
+}
+
+function renderFiles(files){
+  const box=document.getElementById('files');
+  box.innerHTML = ART.map(a=>{
+    const ready = files[a.key];
+    return `<div class="frow">
+      <div class="ic">${a.ic}</div>
+      <div class="txt"><div class="t">${esc(a.t)}</div><div class="d">${esc(a.d)}</div></div>
+      <span class="badge ${ready?'ready':''}">${ready?'พร้อม':'ยังไม่มี'}</span>
+      <button ${ready?'':'disabled'} onclick="location.href='/api/migrate/download/${a.key}'">⬇ ดาวน์โหลด</button>
+    </div>`;
+  }).join('');
+}
+
+async function doBuild(){
+  document.getElementById('err').textContent='';
+  try{
+    const r=await fetch('/api/migrate/build',{method:'POST'});
+    if(!r.ok){ const j=await r.json().catch(()=>({})); document.getElementById('err').textContent=j.detail||('HTTP '+r.status); return; }
+    await refresh();
+  }catch(e){ document.getElementById('err').textContent=String(e); }
+}
+
+async function poll(){
+  const s=await refresh();
+  if(!s.running){ clearInterval(polling); polling=null; }
+}
+
+boot();
+</script>
