@@ -15,6 +15,10 @@ services:
       CRAWL_CRON: "0 2 * * *"                     # auto crawl ทุกคืน 02:00
       RUN_ON_START: "true"                         # crawl อัตโนมัติครั้งแรกถ้ายังไม่มีข้อมูล
       TZ: "Asia/Bangkok"
+      # ---- Migration Prep (Google -> SharePoint) ----
+      SP_SITE_BASE: "https://21sunpassion.sharepoint.com/sites"   # ฐาน URL ของ destination_plan
+      TARGET_DOMAIN: "21sunpassion.com"                            # โดเมนปลายทางสำหรับเดา M365 UPN
+    mem_limit: 1g               # กัน OOM ตอน export ใหญ่ (readiness ใช้ write_only แล้ว)
     dns:                        # กันปัญหา DNS ตอน container วิ่ง (เคยเจอบน Synology)
       - 1.1.1.1
       - 8.8.8.8
