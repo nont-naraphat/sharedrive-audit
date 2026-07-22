@@ -16,6 +16,7 @@ from audit_service import (run_audit, STATE, export_permissions_csv,
                            PERM_STATE)
 from gdrive_audit import (_svc_cached, list_item_permissions,
                           pick_crawl_subject, is_external, is_direct, ROLE_TH)
+from migrate_prep import build_migration_pack, PREP_STATE, ARTIFACTS
 
 BASE = os.path.dirname(__file__)
 
@@ -28,6 +29,9 @@ CFG = {
     "out": os.getenv("OUTPUT_DIR", os.path.join(BASE, "..", "output")),
     "cron": os.getenv("CRAWL_CRON", "0 2 * * *"),
     "run_on_start": os.getenv("RUN_ON_START", "false").lower() == "true",
+    # ฐาน URL ของ SharePoint สำหรับ destination_plan (แก้ได้ทีหลังในไฟล์ CSV)
+    "sp_site_base": os.getenv("SP_SITE_BASE", ""),   # เช่น https://21sunpassion.sharepoint.com/sites
+    "target_domain": os.getenv("TARGET_DOMAIN", "21sunpassion.com"),
 }
 
 scheduler = BackgroundScheduler(timezone=os.getenv("TZ", "Asia/Bangkok"))
@@ -175,6 +179,46 @@ def download_perm_csv():
         raise HTTPException(404, "ยังไม่มีไฟล์ — กด Export Permissions ก่อน")
     return FileResponse(path, media_type="text/csv",
                         filename="shared-drive-permissions.csv")
+
+
+# -------------------------------------------------- Migration prep
+def _prep_job():
+    audit_path = os.path.join(CFG["out"], "audit.json")
+    perms_path = os.path.join(CFG["out"], "permissions.csv")
+    build_migration_pack(
+        audit_path, CFG["out"], CFG["domains"],
+        site_base=CFG["sp_site_base"], target_domain=CFG["target_domain"],
+        perms_csv_path=perms_path,
+    )
+
+
+@app.get("/api/migrate/status")
+def migrate_status():
+    mdir = os.path.join(CFG["out"], "migrate")
+    files = {k: os.path.exists(os.path.join(mdir, fn))
+             for k, (fn, _) in ARTIFACTS.items()}
+    return {**PREP_STATE, "files": files}
+
+
+@app.post("/api/migrate/build")
+def migrate_build(bg: BackgroundTasks):
+    if not os.path.exists(os.path.join(CFG["out"], "audit.json")):
+        raise HTTPException(400, "ยังไม่มี audit.json — กด Sync ในหน้าหลักก่อน")
+    if PREP_STATE["running"]:
+        raise HTTPException(409, "กำลังสร้างชุด migration อยู่แล้ว")
+    bg.add_task(_prep_job)
+    return {"status": "started"}
+
+
+@app.get("/api/migrate/download/{artifact}")
+def migrate_download(artifact: str):
+    if artifact not in ARTIFACTS:
+        raise HTTPException(404, "ไม่รู้จัก artifact นี้")
+    fn, media = ARTIFACTS[artifact]
+    path = os.path.join(CFG["out"], "migrate", fn)
+    if not os.path.exists(path):
+        raise HTTPException(404, "ยังไม่มีไฟล์ — กด Build ก่อน")
+    return FileResponse(path, media_type=media, filename=fn)
 
 
 app.mount("/", StaticFiles(directory=os.path.join(BASE, "static"), html=True), name="static")
