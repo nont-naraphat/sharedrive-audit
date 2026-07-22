@@ -1,0 +1,337 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Org Structure Designer — Entra ID</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{--bg:#f6f7f9;--panel:#fff;--line:#e6e8eb;--ink:#1f2328;--mut:#6a737d;--accent:#2f7d4f;--accentbg:#e8f3ec;--hover:#f0f2f4;--chip:#eef1f4;
+    --e5:#8250df;--e5bg:#efeafc;--bp:#2f7d4f;--bpbg:#e8f3ec;--f3:#9a6700;--f3bg:#fff3cd;--au:#185fa5;--aubg:#eaf1fb;--danger:#c0392b}
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.45 -apple-system,Segoe UI,Roboto,"Noto Sans Thai",Arial,sans-serif;color:var(--ink);background:var(--bg)}
+  header{display:flex;align-items:center;gap:12px;padding:12px 18px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap;position:sticky;top:0;z-index:5}
+  header h1{font-size:16px;margin:0;font-weight:600}
+  header .meta{color:var(--mut);font-size:12px}
+  header .grow{flex:1}
+  button{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:7px 12px;font:inherit;cursor:pointer;color:var(--ink)}
+  button:hover{background:var(--hover)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button.primary:hover{filter:brightness(1.06)}
+  button.danger{border-color:#e6b3ad;color:var(--danger)}
+  button.sm{padding:3px 8px;font-size:12px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;padding:10px 18px;align-items:center;border-bottom:1px solid var(--line);background:var(--panel)}
+  .chip{background:var(--chip);border-radius:999px;padding:3px 11px;font-size:12px;color:var(--mut)}
+  .chip b{color:var(--ink)}
+  .tf{border-radius:8px;padding:4px 10px;font-size:12px}
+  .tf.on{border-color:var(--accent);background:var(--accentbg);color:var(--accent)}
+  .wrap{display:flex;flex-wrap:wrap;min-height:calc(100vh - 118px)}
+  #tree{flex:1 1 380px;min-width:320px;overflow:auto;padding:10px 12px;background:var(--panel);border-right:1px solid var(--line)}
+  #detail{flex:1 1 300px;min-width:280px;padding:16px 18px;background:var(--bg)}
+  .nrow{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:6px;cursor:pointer;white-space:nowrap}
+  .nrow:hover{background:var(--hover)}
+  .nrow.sel{background:var(--accentbg)}
+  .tw{width:14px;text-align:center;color:var(--mut);font-size:11px;flex:none;user-select:none}
+  .nm{overflow:hidden;text-overflow:ellipsis}
+  .sgc{color:#b4b2a9;font-size:11px;margin-left:2px}
+  .pill{font-size:10px;font-weight:600;padding:1px 7px;border-radius:999px}
+  .pill.E5{background:var(--e5bg);color:var(--e5)} .pill.BP{background:var(--bpbg);color:var(--bp)} .pill.F3{background:var(--f3bg);color:var(--f3)}
+  .aub{font-size:10px;color:var(--au);background:var(--aubg);border-radius:4px;padding:0 5px}
+  .acts{display:none;gap:4px;margin-left:6px}
+  .nrow:hover .acts{display:inline-flex}
+  body.edit .acts{display:inline-flex}
+  .icbtn{border:none;background:transparent;padding:2px 4px;cursor:pointer;font-size:12px;border-radius:4px;color:var(--mut)}
+  .icbtn:hover{background:#dfe3e8}
+  .kv{display:grid;grid-template-columns:118px 1fr;gap:6px 10px;font-size:13px;margin-bottom:8px}
+  .kv .k{color:var(--mut)} .kv .v{word-break:break-all}
+  code{display:block;background:var(--chip);border-radius:6px;padding:8px 10px;font-size:11px;word-break:break-all;font-family:ui-monospace,Menlo,Consolas,monospace}
+  .box{margin-top:12px;padding:9px 11px;border-radius:8px;font-size:12px}
+  input,select{border:1px solid var(--line);border-radius:7px;padding:6px 9px;font:inherit;width:100%}
+  label{font-size:12px;color:var(--mut);display:block;margin:8px 0 3px}
+  .row2{display:grid;grid-template-columns:1fr 90px;gap:8px}
+  .empty{color:var(--mut);text-align:center;padding:44px 0;font-size:13px}
+  .foot{padding:10px 18px;border-top:1px solid var(--line);color:var(--mut);font-size:12px;background:var(--panel)}
+</style>
+
+<header>
+  <h1>🏢 Org Structure Designer</h1>
+  <span class="meta">Entra ID · อิงผัง Lark (Sunsu Holding)</span>
+  <span class="grow"></span>
+  <button id="editbtn" onclick="toggleEdit()">✏️ โหมดแก้ไข: ปิด</button>
+  <button onclick="dlCsv()">⬇ entra-org-groups.csv</button>
+  <button class="primary" onclick="dlPs1()">⬇ New-EntraOrgStructure.ps1</button>
+</header>
+
+<div class="chips">
+  <span class="chip">Administrative Units <b id="c-au">4</b></span>
+  <span class="chip">Groups <b id="c-grp">46</b></span>
+  <span class="grow" style="flex:1"></span>
+  <span style="font-size:12px;color:var(--mut)">กรอง tier:</span>
+  <button class="tf on" data-t="all" onclick="setTier('all')">ทั้งหมด</button>
+  <button class="tf" data-t="E5" onclick="setTier('E5')">E5 · <span id="n-E5">0</span></button>
+  <button class="tf" data-t="BP" onclick="setTier('BP')">BP · <span id="n-BP">0</span></button>
+  <button class="tf" data-t="F3" onclick="setTier('F3')">F3 · <span id="n-F3">0</span></button>
+</div>
+
+<div class="wrap">
+  <div id="tree"></div>
+  <div id="detail"><div class="empty">คลิกกลุ่มในผังเพื่อดูรายละเอียด · เปิดโหมดแก้ไขเพื่อเพิ่ม/ลบ/เปลี่ยนชื่อแผนก</div></div>
+</div>
+<div class="foot">แก้ผังในหน้านี้แล้วกดโหลด CSV/PS1 ได้เลย — generate ฝั่ง client ไม่ต้องมี server · รันด้วย <code style="display:inline;padding:1px 6px">.\New-EntraOrgStructure.ps1 -CsvPath .\entra-org-groups.csv</code></div>
+
+<script type="text/plain" id="ps1tpl"><#
+  New-EntraOrgStructure.ps1
+  สร้างโครงสร้างองค์กรใน Entra ID จากไฟล์ entra-org-groups.csv
+    - Administrative Unit ต่อบริษัท (ขอบเขต delegated admin)
+    - Security Group แบบซ้อนชั้น (mirror ผัง Lark) สำหรับยิง Intune / Wi-Fi / SharePoint
+    - License group 3 ตัว (E5 / BP / F3) แบบสมาชิกตรง
+  idempotent: มีอยู่แล้วจะข้าม รันซ้ำได้ปลอดภัย
+
+  ครั้งแรก:  Install-Module Microsoft.Graph -Scope CurrentUser
+  รัน:       .\New-EntraOrgStructure.ps1 -CsvPath .\entra-org-groups.csv
+             .\New-EntraOrgStructure.ps1 -CsvPath .\entra-org-groups.csv -DryRun
+#>
+[CmdletBinding()]
+param([string]$CsvPath = ".\entra-org-groups.csv",[switch]$DryRun)
+$ErrorActionPreference = "Stop"
+if (-not (Test-Path $CsvPath)) { throw "ไม่พบไฟล์ CSV: $CsvPath" }
+Import-Module Microsoft.Graph.Groups
+Import-Module Microsoft.Graph.Identity.DirectoryManagement
+Connect-MgGraph -Scopes @("Group.ReadWrite.All","GroupMember.ReadWrite.All","AdministrativeUnit.ReadWrite.All","Directory.ReadWrite.All") | Out-Null
+$ctx = Get-MgContext
+Write-Host "เชื่อมต่อ tenant: $($ctx.TenantId)  ในฐานะ $($ctx.Account)" -ForegroundColor Cyan
+if ($DryRun) { Write-Host "*** DRY RUN — ไม่สร้างจริง ***" -ForegroundColor Yellow }
+$rows = Import-Csv -Path $CsvPath -Encoding UTF8
+$groupId = @{}
+function Get-AuByName([string]$name){ Get-MgDirectoryAdministrativeUnit -Filter "displayName eq '$($name -replace "'","''")'" -ErrorAction SilentlyContinue | Select-Object -First 1 }
+Write-Host "`n=== Administrative Units ===" -ForegroundColor Green
+foreach ($r in $rows | Where-Object { $_.Type -eq "AU" }) {
+  if (Get-AuByName $r.DisplayName) { Write-Host ("  = มีอยู่แล้ว: {0}" -f $r.DisplayName); continue }
+  if ($DryRun) { Write-Host ("  + (dry) AU: {0}" -f $r.DisplayName) -ForegroundColor Yellow; continue }
+  New-MgDirectoryAdministrativeUnit -BodyParameter @{ displayName=$r.DisplayName; description=$r.Description } | Out-Null
+  Write-Host ("  + สร้าง AU: {0}" -f $r.DisplayName)
+}
+function Get-GroupByName([string]$name){ Get-MgGroup -Filter "displayName eq '$($name -replace "'","''")'" -ConsistencyLevel eventual -CountVariable c -ErrorAction SilentlyContinue | Select-Object -First 1 }
+Write-Host "`n=== Groups ===" -ForegroundColor Green
+foreach ($r in $rows | Where-Object { $_.Type -eq "GROUP" }) {
+  $ex = Get-GroupByName $r.DisplayName
+  if ($ex) { $groupId[$r.DisplayName]=$ex.Id; Write-Host ("  = มีอยู่แล้ว: {0}" -f $r.DisplayName); continue }
+  if ($DryRun) { Write-Host ("  + (dry) group: {0}" -f $r.DisplayName) -ForegroundColor Yellow; continue }
+  $g = New-MgGroup -DisplayName $r.DisplayName -MailNickname $r.MailNickname -Description $r.Description -SecurityEnabled -MailEnabled:$false
+  $groupId[$r.DisplayName]=$g.Id; Write-Host ("  + สร้าง group: {0}" -f $r.DisplayName)
+}
+if ($DryRun) { Write-Host "`nDRY RUN จบ" -ForegroundColor Yellow; Disconnect-MgGraph | Out-Null; return }
+function Test-IsMember([string]$p,[string]$c){ (Get-MgGroupMember -GroupId $p -All -ErrorAction SilentlyContinue | Where-Object { $_.Id -eq $c }).Count -gt 0 }
+Write-Host "`n=== Nesting ===" -ForegroundColor Green
+foreach ($r in $rows | Where-Object { $_.Type -eq "GROUP" -and $_.ParentGroup }) {
+  $cid=$groupId[$r.DisplayName]; $pid=$groupId[$r.ParentGroup]
+  if (-not $cid -or -not $pid) { Write-Warning ("ข้าม {0} -> {1}" -f $r.DisplayName,$r.ParentGroup); continue }
+  if (Test-IsMember $pid $cid) { Write-Host ("  = {0} อยู่ใน {1} แล้ว" -f $r.DisplayName,$r.ParentGroup); continue }
+  New-MgGroupMemberByRef -GroupId $pid -OdataId "https://graph.microsoft.com/v1.0/directoryObjects/$cid"
+  Write-Host ("  + {0}  ->  {1}" -f $r.DisplayName,$r.ParentGroup)
+}
+Write-Host "`n[OK] เสร็จสิ้น" -ForegroundColor Cyan
+Disconnect-MgGraph | Out-Null
+</script>
+
+<script>
+const T={n:'Sunsu Holding',c:'HOLD-ALL',l:'',p:'',ch:[
+ {n:'Bearhouse',c:'BH-ALL',l:'',au:'AU-Bearhouse',p:'Bearhouse',ch:[
+   {n:'Purchase',c:'BH-PUR',l:'BP'},
+   {n:'Operations (HQ)',c:'BH-OPS',l:'BP',ch:[
+     {n:'QC-Operations',c:'BH-OPS-QC',l:'BP'},{n:'Area Manager',c:'BH-OPS-AM',l:'F3'},
+     {n:'Account Branch',c:'BH-OPS-ACCT',l:'F3'},{n:'QC Branch',c:'BH-OPS-QCB',l:'F3'},
+     {n:'Operations Training & Setup',c:'BH-OPS-TRN',l:'BP'}]},
+   {n:'Marketing',c:'BH-MKT',l:'BP',ch:[{n:'Graphic',c:'BH-MKT-GFX',l:'BP'},{n:'Marketing',c:'BH-MKT-MKT',l:'BP'}]},
+   {n:'Warehouse&Logistic',c:'BH-WHL',l:'F3'},
+   {n:'Supply Chain Management',c:'BH-SCM',l:'BP',ch:[
+     {n:'Production',c:'BH-SCM-PROD',l:'F3'},{n:'QC (Warehouse)',c:'BH-SCM-QC',l:'F3'},{n:'Admin',c:'BH-SCM-ADM',l:'BP'}]},
+   {n:'Product&Development',c:'BH-PND',l:'BP'},{n:'Planning',c:'BH-PLN',l:'BP'},
+   {n:'Business Development',c:'BH-BIZDEV',l:'BP'},{n:'Research & Development',c:'BH-RND',l:'BP'}]},
+ {n:'Sunsu',c:'SS-ALL',l:'',au:'AU-Sunsu',p:'Sunsu',ch:[
+   {n:'Product Development',c:'SS-PD',l:'BP'},
+   {n:'Supply Chain Management',c:'SS-SCM',l:'BP',ch:[{n:'Purchasing',c:'SS-SCM-PUR',l:'BP'}]},
+   {n:'Domestic Sales',c:'SS-DS',l:'BP',ch:[{n:'Sale',c:'SS-DS-SALE',l:'F3'}]},
+   {n:'International Business (IB)',c:'SS-IB',l:'BP'},
+   {n:'Marketing',c:'SS-MKT',l:'BP',ch:[{n:'Graphic',c:'SS-MKT-GFX',l:'BP'},{n:'Marketing',c:'SS-MKT-MKT',l:'BP'},{n:'Intern-E-commerce',c:'SS-MKT-ECOM',l:'F3'}]}]},
+ {n:'Bearhug',c:'BHG-ALL',l:'',au:'AU-Bearhug',p:'Bearhug',ch:[{n:'CEO Office',c:'BHG-CEO',l:'E5'}]},
+ {n:'Share Service',c:'SHR-ALL',l:'',au:'AU-ShareService',p:'Share Service',ch:[
+   {n:'People',c:'SHR-PPL',l:'BP'},{n:'Finance',c:'SHR-FIN',l:'BP'},{n:'Accounting',c:'SHR-ACCT',l:'BP'},
+   {n:'Assistant Coo',c:'SHR-ACOO',l:'E5'},
+   {n:'Business transformation',c:'SHR-BT',l:'BP',ch:[
+     {n:'PM',c:'SHR-BT-PM',l:'BP'},{n:'Secretary CEO',c:'SHR-BT-SEC',l:'E5'},{n:'Tech Team',c:'SHR-BT-TECH',l:'BP'}]}]},
+]};
+
+let tier='all', sel=null, edit=false;
+const FLAT={},PARENT={},PATH={},COLLAPSED={};
+
+function reindex(){
+ for(const k in FLAT)delete FLAT[k];
+ (function walk(n,par,pp){
+   FLAT[n.c]=n;PARENT[n.c]=par;
+   PATH[n.c]=(n.p!==undefined&&n.p!=='')?n.p:(pp?pp+'/'+n.n:(n.c==='HOLD-ALL'?'':n.n));
+   (n.ch||[]).forEach(k=>walk(k,n.c,PATH[n.c]));
+ })(T,'','');
+}
+
+function isRoll(n){return n.c==='HOLD-ALL'||/-ALL$/.test(n.c)}
+function brandOf(c){let x=c;while(PARENT[x]&&PARENT[x]!=='HOLD-ALL')x=PARENT[x];return x}
+
+function counts(){
+ let au=0,grp=1,t={E5:0,BP:0,F3:0}; // grp starts 1 for HOLD-ALL
+ (T.ch||[]).forEach(b=>{au++;grp++;});
+ (function walk(n){(n.ch||[]).forEach(k=>{if(!isRoll(k)){grp++;if(k.l)t[k.l]++;}walk(k);})})(T);
+ grp+=3; // LIC groups
+ document.getElementById('c-au').textContent=au;
+ document.getElementById('c-grp').textContent=grp;
+ ['E5','BP','F3'].forEach(x=>document.getElementById('n-'+x).textContent=t[x]);
+}
+
+function pill(l){return l?`<span class="pill ${l}">${l}</span>`:''}
+
+function rowHTML(n,d){
+ const has=(n.ch||[]).length>0, col=COLLAPSED[n.c];
+ const dim=(tier!=='all'&&!isRoll(n)&&n.l!==tier)?'opacity:.3':'';
+ let h=`<div class="nrow${sel===n.c?' sel':''}" data-c="${n.c}" style="${dim}">
+   <span style="width:${d*15}px;flex:none"></span>
+   <span class="tw" data-tg="${n.c}">${has?(col?'▸':'▾'):''}</span>
+   <span style="flex:none">${isRoll(n)?(d===0?'🏛️':'🗂️'):'📁'}</span>
+   <span class="nm">${esc(n.n)}</span>
+   ${n.au?`<span class="aub">${n.au}</span>`:''}
+   ${pill(n.l)}<span class="sgc">SG-${n.c}</span>
+   <span class="acts">
+     <button class="icbtn" title="เพิ่มแผนกย่อย" data-add="${n.c}">➕</button>
+     ${n.c!=='HOLD-ALL'&&!isRoll(n)?`<button class="icbtn" title="เปลี่ยนชื่อ" data-ren="${n.c}">✏️</button><button class="icbtn" title="ลบ" data-del="${n.c}">🗑️</button>`:''}
+   </span></div>`;
+ if(has&&!col){h+=`<div>`;n.ch.forEach(k=>h+=rowHTML(k,d+1));h+=`</div>`;}
+ return h;
+}
+const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function render(){
+ reindex();counts();
+ document.getElementById('tree').innerHTML=rowHTML(T,0);
+ document.querySelectorAll('.nrow').forEach(el=>{
+   el.onclick=e=>{
+     const tg=e.target.closest('.tw'); if(tg&&tg.textContent){COLLAPSED[tg.dataset.tg]=!COLLAPSED[tg.dataset.tg];render();return;}
+     const add=e.target.closest('[data-add]'); if(add){sel=add.dataset.add;render();showAdd(sel);return;}
+     const ren=e.target.closest('[data-ren]'); if(ren){doRename(ren.dataset.ren);return;}
+     const del=e.target.closest('[data-del]'); if(del){doDelete(del.dataset.del);return;}
+     sel=el.dataset.c;render();showDetail(sel);
+   };
+ });
+}
+
+function findNode(c){return FLAT[c]}
+function showDetail(c){
+ const n=findNode(c),par=PARENT[c],path=PATH[c];
+ const rule=isRoll(n)?'(กลุ่มรวม — ไม่มี rule)':`(user.department -eq "${path}")`;
+ const kv=[['ชื่อกลุ่ม','SG-'+c],['ประเภท',c==='HOLD-ALL'?'รวมทั้งองค์กร':(isRoll(n)?'รวมระดับบริษัท':'แผนก (Security Group)')],
+   ['MailNickname',mnick(c)],['อยู่ใต้กลุ่ม',par?('SG-'+par):'— (บนสุด)'],['Department path',path||'—']];
+ let extra='';
+ if(n.l){const m={E5:['var(--e5bg)','var(--e5)','LIC-M365-E5'],BP:['var(--bpbg)','var(--bp)','LIC-M365-BP'],F3:['var(--f3bg)','var(--f3)','LIC-M365-F3']}[n.l];
+   extra+=`<div class="box" style="background:${m[0]};color:${m[1]}"><b>License ${n.l}</b> → ใส่คนเข้ากลุ่ม <b>${m[2]}</b> (สมาชิกตรง)</div>`;}
+ if(n.au)extra+=`<div class="box" style="background:var(--aubg);color:var(--au)">อยู่ใน Administrative Unit <b>${n.au}</b></div>`;
+ let editUI='';
+ if(edit&&!isRoll(n)){
+   editUI=`<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+     <label>ชื่อแผนก</label><input id="e-name" value="${esc(n.n)}">
+     <label>License tier</label>
+     <select id="e-lic">${['','E5','BP','F3'].map(o=>`<option ${n.l===o?'selected':''} value="${o}">${o||'— (ไม่มี)'}</option>`).join('')}</select>
+     <div style="margin-top:10px;display:flex;gap:8px"><button class="primary sm" onclick="saveEdit('${c}')">บันทึก</button>
+     <button class="sm" onclick="showAdd('${c}')">➕ แผนกย่อย</button>
+     <button class="danger sm" onclick="doDelete('${c}')">🗑️ ลบ</button></div></div>`;
+ }else if(edit&&isRoll(n)){
+   editUI=`<div style="margin-top:14px"><button class="sm" onclick="showAdd('${c}')">➕ เพิ่มแผนกใน ${esc(n.n)}</button></div>`;
+ }
+ document.getElementById('detail').innerHTML=`
+   <div style="font-size:15px;font-weight:600;margin-bottom:2px">${esc(n.n)}</div>
+   <div style="font-size:12px;color:var(--mut);margin-bottom:12px">${(n.ch||[]).length} กลุ่มย่อย</div>
+   <div class="kv">${kv.map(r=>`<div class="k">${r[0]}</div><div class="v">${esc(r[1])}</div>`).join('')}</div>
+   ${extra}
+   <div style="margin-top:12px"><div style="font-size:11px;color:var(--mut);margin-bottom:4px">Dynamic membership rule</div><code>${esc(rule)}</code></div>
+   ${editUI}`;
+}
+
+function showAdd(parentCode){
+ const p=findNode(parentCode);
+ const base=parentCode.replace(/-ALL$/,'');
+ document.getElementById('detail').innerHTML=`
+   <div style="font-size:15px;font-weight:600;margin-bottom:10px">➕ เพิ่มแผนกใน ${esc(p.n)}</div>
+   <label>ชื่อแผนก (แสดงผล + ใช้เป็น department path)</label><input id="a-name" placeholder="เช่น E-commerce">
+   <label>โค้ดย่อ (อังกฤษ/ตัวเลข) — จะได้ SG-${base}-<b>???</b></label><input id="a-code" placeholder="เช่น ECOM">
+   <label>License tier</label><select id="a-lic"><option value="BP" selected>BP</option><option value="E5">E5</option><option value="F3">F3</option><option value="">— (ไม่มี)</option></select>
+   <div id="a-err" style="color:var(--danger);font-size:12px;margin-top:8px"></div>
+   <div style="margin-top:12px;display:flex;gap:8px"><button class="primary sm" onclick="doAdd('${parentCode}')">เพิ่ม</button><button class="sm" onclick="showDetail('${parentCode}')">ยกเลิก</button></div>`;
+}
+function doAdd(parentCode){
+ const name=document.getElementById('a-name').value.trim();
+ let short=document.getElementById('a-code').value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+ const lic=document.getElementById('a-lic').value;
+ const err=document.getElementById('a-err');
+ if(!name){err.textContent='กรอกชื่อแผนก';return;}
+ if(!short){err.textContent='กรอกโค้ดย่อ';return;}
+ const base=parentCode.replace(/-ALL$/,'');
+ const code=base+'-'+short;
+ if(FLAT[code]){err.textContent='โค้ดนี้มีแล้ว: SG-'+code;return;}
+ const p=findNode(parentCode);
+ (p.ch=p.ch||[]).push({n:name,c:code,l:lic});
+ COLLAPSED[parentCode]=false;sel=code;render();showDetail(code);
+}
+function doRename(c){
+ const n=findNode(c);const v=prompt('เปลี่ยนชื่อแผนก',n.n);
+ if(v&&v.trim()){n.n=v.trim();render();showDetail(c);}
+}
+function saveEdit(c){
+ const n=findNode(c);n.n=document.getElementById('e-name').value.trim()||n.n;n.l=document.getElementById('e-lic').value;
+ render();showDetail(c);
+}
+function doDelete(c){
+ const n=findNode(c);
+ if(!confirm(`ลบ "${n.n}" และกลุ่มย่อยทั้งหมด?`))return;
+ const par=findNode(PARENT[c]);par.ch=par.ch.filter(k=>k.c!==c);
+ sel=null;render();document.getElementById('detail').innerHTML='<div class="empty">ลบแล้ว — เลือกกลุ่มอื่น</div>';
+}
+
+function toggleEdit(){edit=!edit;document.body.classList.toggle('edit',edit);
+ document.getElementById('editbtn').textContent='✏️ โหมดแก้ไข: '+(edit?'เปิด':'ปิด');
+ if(sel)showDetail(sel);}
+function setTier(t){tier=t;document.querySelectorAll('.tf').forEach(b=>b.classList.toggle('on',b.dataset.t===t));render();if(sel)showDetail(sel);}
+
+function mnick(c){return ('sg-'+c.toLowerCase()).replace(/[^a-z0-9-]/g,'')}
+
+function genRows(){
+ reindex();
+ const rows=[];
+ const brands=T.ch||[];
+ brands.forEach(b=>rows.push(['AU',b.au,'',`Administrative Unit — ${b.n}`,'','','','']));
+ rows.push(['GROUP','SG-HOLD-ALL','sg-hold-all','รวมพนักงานทั้ง Sunsu Holding (ยิง Intune/Wi-Fi ระดับองค์กร)','','','','']);
+ brands.forEach(b=>rows.push(['GROUP','SG-'+b.c,mnick(b.c),`รวมพนักงาน ${b.n}`,'SG-HOLD-ALL',b.n,'','']));
+ brands.forEach(b=>{
+   (function walk(n){
+     (n.ch||[]).forEach(k=>{
+       const parent = isRoll(n)? 'SG-'+b.c : 'SG-'+n.c;
+       const path=PATH[k.c];
+       rows.push(['GROUP','SG-'+k.c,mnick(k.c),`${path}  [${k.l||''}]`,parent,path,k.l||'',`(user.department -eq "${path}")`]);
+       walk(k);
+     });
+   })(b);
+ });
+ rows.push(['GROUP','LIC-M365-E5','lic-m365-e5','กลุ่มมอบ license E5 (ผู้บริหาร) — สมาชิกตรงเท่านั้น','','','E5','']);
+ rows.push(['GROUP','LIC-M365-BP','lic-m365-bp','กลุ่มมอบ license Business Premium (HQ) — สมาชิกตรงเท่านั้น','','','BP','']);
+ rows.push(['GROUP','LIC-M365-F3','lic-m365-f3','กลุ่มมอบ license F3 (สาขา/ร้าน) — สมาชิกตรงเท่านั้น','','','F3','']);
+ return rows;
+}
+function csvEsc(v){v=String(v==null?'':v);return /[",\r\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
+function toCsv(){
+ const head=['Type','DisplayName','MailNickname','Description','ParentGroup','DepartmentPath','LicenseHint','MembershipRule'];
+ const lines=[head].concat(genRows()).map(r=>r.map(csvEsc).join(','));
+ return lines.join('\r\n')+'\r\n';
+}
+function download(name,text,mime){
+ const blob=new Blob([text],{type:mime});const u=URL.createObjectURL(blob);
+ const a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();
+ setTimeout(()=>URL.revokeObjectURL(u),1500);
+}
+function dlCsv(){download('entra-org-groups.csv','\ufeff'+toCsv(),'text/csv;charset=utf-8')}
+function dlPs1(){download('New-EntraOrgStructure.ps1',document.getElementById('ps1tpl').textContent.replace(/^\n/,''),'text/plain;charset=utf-8')}
+
+render();
+</script>
