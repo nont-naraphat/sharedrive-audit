@@ -7,6 +7,7 @@
     --bg:#f6f7f9; --panel:#fff; --line:#e6e8eb; --ink:#1f2328; --mut:#6a737d;
     --accent:#2f7d4f; --accentbg:#e8f3ec; --hover:#f0f2f4; --chip:#eef1f4;
     --folder:#4a7bd0; --file:#8a94a0; --drive:#2f7d4f; --warn:#9a6700;
+    --bar:#cfe0f5; --barfill:#4a7bd0; --barhot:#e0863a;
     --r-organizer:#8250df; --r-fileOrganizer:#0969da; --r-writer:#1a7f37;
     --r-commenter:#9a6700; --r-reader:#6a737d; --r-owner:#8250df;
   }
@@ -21,6 +22,10 @@
   button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
   button:hover{background:var(--hover)} button.primary:hover{filter:brightness(1.05)}
   button:disabled{opacity:.55;cursor:default}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{border:0;border-radius:0;padding:7px 12px}
+  .seg button.on{background:var(--accent);color:#fff}
+  .seg button:not(.on):hover{background:var(--hover)}
   .spin{width:13px;height:13px;border:2px solid #fff6;border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite}
   @keyframes sp{to{transform:rotate(360deg)}}
   .chips{display:flex;gap:8px;flex-wrap:wrap;padding:10px 18px;align-items:center}
@@ -28,7 +33,8 @@
   .chip b{color:var(--ink)}
   .status{font-size:12px;color:var(--mut)}
   .wrap{display:grid;grid-template-columns:1fr 360px;height:calc(100vh - 132px)}
-  .tree{overflow:auto;padding:8px 10px;background:var(--panel);border-right:1px solid var(--line)}
+  .left{overflow:auto;background:var(--panel);border-right:1px solid var(--line)}
+  .tree{padding:8px 10px}
   .detail{overflow:auto;padding:16px 18px;background:var(--bg)}
   ul.t{list-style:none;margin:0;padding-left:16px}ul.t.root{padding-left:0}
   li.row{margin:0}
@@ -38,7 +44,29 @@
   .ic{width:15px;text-align:center}.nm{overflow:hidden;text-overflow:ellipsis}
   .cnt{color:var(--mut);font-size:11px;margin-left:6px}
   .ic.drive{color:var(--drive)}.ic.folder{color:var(--folder)}.ic.file{color:var(--file)}
+  .grow2{flex:1 1 auto;min-width:8px}
+  .bar{width:66px;height:7px;border-radius:4px;background:var(--bar);flex:0 0 auto;overflow:hidden}
+  .bar>i{display:block;height:100%;background:var(--barfill)}
+  .bar.hot>i{background:var(--barhot)}
+  .sz{font-size:11px;color:var(--mut);flex:0 0 auto;width:66px;text-align:right;font-variant-numeric:tabular-nums}
+  .sz.big{color:var(--ink);font-weight:600}
   .hidden{display:none}
+  /* ---- Top view ---- */
+  .top{padding:12px 16px}
+  .top h3{font-size:13px;margin:16px 0 8px;font-weight:650;color:var(--ink)}
+  .top h3:first-child{margin-top:2px}
+  .topctl{display:flex;gap:10px;align-items:center;font-size:12px;color:var(--mut);flex-wrap:wrap;margin-bottom:4px}
+  .topctl select{border:1px solid var(--line);border-radius:7px;padding:4px 8px;font:inherit}
+  .trow{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:8px;cursor:pointer}
+  .trow:hover{background:var(--hover)}
+  .trow .rk{width:22px;color:var(--mut);font-size:12px;text-align:right;flex:0 0 auto}
+  .trow .who{min-width:0;flex:1 1 auto}
+  .trow .who .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .trow .who .p{font-size:11px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .trow .tbar{width:160px;height:9px;border-radius:5px;background:var(--bar);flex:0 0 auto;overflow:hidden}
+  .trow .tbar>i{display:block;height:100%;background:var(--barfill)}
+  .trow .tsz{width:88px;text-align:right;font-size:12.5px;font-weight:600;flex:0 0 auto;font-variant-numeric:tabular-nums}
+  .trow .tct{width:120px;text-align:right;font-size:11px;color:var(--mut);flex:0 0 auto}
   .detail h2{font-size:15px;margin:0 0 4px}
   .detail .sub{color:var(--mut);font-size:12px;word-break:break-all;margin-bottom:14px}
   .kv{display:grid;grid-template-columns:120px 1fr;gap:6px 10px;font-size:13px;margin-bottom:18px}
@@ -58,6 +86,10 @@
   <h1>🗂️ Shared Drive Audit</h1>
   <span class="meta" id="gen"></span>
   <span class="grow"></span>
+  <span class="seg" id="viewseg">
+    <button id="v-tree" class="on" onclick="setView('tree')">🌳 Tree</button>
+    <button id="v-top" onclick="setView('top')">📊 Top ใหญ่สุด</button>
+  </span>
   <input type="search" id="q" placeholder="ค้นหาชื่อไฟล์ / โฟลเดอร์…">
   <button id="refresh" onclick="doRefresh()"><span id="rico">🔄</span> <span id="rtxt">Sync ตอนนี้</span></button>
   <button id="permbtn" onclick="doPermExport()">🔑 <span id="ptxt">Export Permissions</span></button>
@@ -69,16 +101,21 @@
 <div class="chips" id="chips"></div>
 
 <div class="wrap">
-  <div class="tree" id="tree"><div class="empty">กำลังโหลด…</div></div>
+  <div class="left">
+    <div class="tree" id="treeview"><div class="empty">กำลังโหลด…</div></div>
+    <div class="top hidden" id="topview"></div>
+  </div>
   <div class="detail" id="detail"><div class="empty">เลือกไฟล์หรือโฟลเดอร์เพื่อดูรายละเอียด</div></div>
 </div>
 
 <script>
 let DATA=null, MEMBERS={}, polling=null;
+let VIEW='tree', TOPN=100, TOPDEPTH='all', MAXDRIVE=1;
 const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const humanSize=n=>{if(!n)return'—';const u=['B','KB','MB','GB','TB'];let f=n,i=0;while(f>=1024&&i<u.length-1){f/=1024;i++}return i===0?n+' B':f.toFixed(2)+' '+u[i]};
+const humanSize=n=>{if(!n)return'—';const u=['B','KB','MB','GB','TB'];let f=n,i=0;while(f>=1024&&i<u.length-1){f/=1024;i++}return i===0?n+' B':f.toFixed(f<10?2:1)+' '+u[i]};
 const fmtDate=s=>s?new Date(s).toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short'}):'—';
 const icon=t=>t==='drive'?'🗄️':t==='folder'?'📁':'📄';
+const cssId=s=>window.CSS&&CSS.escape?CSS.escape(s):String(s).replace(/["\\]/g,'\\$&');
 
 async function boot(){ await refreshStatus(); await loadData(); }
 
@@ -130,20 +167,37 @@ async function doRefresh(){
 async function loadData(){
   const r=await fetch('/api/audit');
   if(!r.ok){
-    document.getElementById('tree').innerHTML=
+    document.getElementById('treeview').innerHTML=
       '<div class="empty">ยังไม่มีข้อมูล<br>กด <b>Sync ตอนนี้</b> เพื่อดึงข้อมูลครั้งแรก'+
       '<br><button class="primary" onclick="doRefresh()">🔄 Sync เลย</button></div>';
     document.getElementById('chips').innerHTML='';
     return;
   }
   DATA=await r.json(); MEMBERS=DATA.members||{};
+  // คำนวณขนาดรวม + จำนวนไฟล์/โฟลเดอร์ต่อ "โฟลเดอร์" (audit.json ให้มาแค่ระดับ drive)
+  (DATA.drives||[]).forEach(aggregate);
+  MAXDRIVE=Math.max(1,...(DATA.drives||[]).map(d=>d._aggSize||0));
   renderChips(); renderTree();
+  if(VIEW==='top') renderTop();
+}
+
+// ---- รวมขนาด/จำนวนแบบ recursive (memo ลงบน node เลย) ----
+function aggregate(node){
+  if(node.type==='file'){node._aggSize=node.size||0;node._aggFiles=0;node._aggFolders=0;return;}
+  let s=0,files=0,folders=0;
+  (node.children||[]).forEach(c=>{
+    aggregate(c);
+    s+=c._aggSize;
+    if(c.type==='file'){files+=1;}
+    else{folders+=1; files+=c._aggFiles; folders+=c._aggFolders;}
+  });
+  node._aggSize=s; node._aggFiles=files; node._aggFolders=folders;
 }
 
 function renderChips(){
   const s=DATA.summary||[];
   const f=s.reduce((a,x)=>a+x.files,0), d=s.reduce((a,x)=>a+x.folders,0);
-  const sz=DATA.drives.reduce((a,x)=>a+(x.totalSize||0),0);
+  const sz=DATA.drives.reduce((a,x)=>a+(x._aggSize||x.totalSize||0),0);
   document.getElementById('chips').innerHTML=
     `<span class="chip"><b>${s.length}</b> shared drives</span>`+
     `<span class="chip"><b>${f.toLocaleString()}</b> ไฟล์</span>`+
@@ -151,23 +205,137 @@ function renderChips(){
     `<span class="chip">รวม <b>${humanSize(sz)}</b></span>`;
 }
 
-function nodeHTML(n, driveId){
+// denom = ค่าที่ใช้เทียบความยาวแท่ง (drive: เทียบ drive ใหญ่สุด, โฟลเดอร์: เทียบ parent)
+function nodeHTML(n, driveId, denom){
   driveId = driveId || n.id;
   const kids=n.children&&n.children.length;
   const twist=(n.type==='drive'||n.type==='folder')?`<span class="tw">${kids?'▸':''}</span>`:`<span class="tw"></span>`;
-  let cnt=n.type==='drive'?`<span class="cnt">${n.fileCount||0} ไฟล์ · ${n.folderCount||0} โฟลเดอร์</span>`:'';
+  const cnt=n.type==='drive'?`<span class="cnt">${(n._aggFiles||0).toLocaleString()} ไฟล์ · ${(n._aggFolders||0).toLocaleString()} โฟลเดอร์</span>`:'';
+  const sz = n.type==='file' ? (n.size||0) : (n._aggSize||0);
+  const pct = denom>0 ? Math.min(100, sz/denom*100) : 0;
+  const hot = pct>=60 ? ' hot' : '';
+  const showBar = n.type!=='file';
+  const barHTML = showBar ? `<span class="bar${hot}"><i style="width:${pct.toFixed(1)}%"></i></span>` : '';
+  const szCls = (n.type!=='file' && pct>=40) ? 'sz big' : 'sz';
   const li=document.createElement('li');li.className='row';
-  li.innerHTML=`<div class="node"><span class="ic ${n.type}">${icon(n.type)}</span></div>`;
-  li.querySelector('.node').insertAdjacentHTML('afterbegin',twist);
-  li.querySelector('.node').insertAdjacentHTML('beforeend',`<span class="nm">${esc(n.name)}</span>${cnt}`);
-  const nodeEl=li.querySelector('.node');nodeEl._data=n;nodeEl._drive=driveId;
+  li.innerHTML=`<div class="node" data-id="${esc(n.id)}"></div>`;
+  const nodeEl=li.querySelector('.node');
+  nodeEl.insertAdjacentHTML('beforeend',twist);
+  nodeEl.insertAdjacentHTML('beforeend',`<span class="ic ${n.type}">${icon(n.type)}</span><span class="nm">${esc(n.name)}</span>${cnt}<span class="grow2"></span>${barHTML}<span class="${szCls}">${humanSize(sz)}</span>`);
+  nodeEl._data=n;nodeEl._drive=driveId;
   nodeEl.onclick=e=>{e.stopPropagation();selectNode(nodeEl,n);toggle(li,n);};
-  if(kids){const ul=document.createElement('ul');ul.className='t hidden';n.children.forEach(c=>ul.appendChild(nodeHTML(c,driveId)));li.appendChild(ul);}
+  if(kids){const ul=document.createElement('ul');ul.className='t hidden';const cd=(n.type==='file')?0:(n._aggSize||0);n.children.forEach(c=>ul.appendChild(nodeHTML(c,driveId,cd)));li.appendChild(ul);}
   return li;
 }
 function toggle(li,n){if(!(n.children&&n.children.length))return;const ul=li.querySelector('ul'),tw=li.querySelector('.tw');const open=!ul.classList.contains('hidden');ul.classList.toggle('hidden',open);tw.textContent=open?'▸':'▾';}
-function renderTree(){const root=document.createElement('ul');root.className='t root';(DATA.drives||[]).forEach(d=>root.appendChild(nodeHTML(d,d.id)));const c=document.getElementById('tree');c.innerHTML='';c.appendChild(root);}
+function renderTree(){
+  const root=document.createElement('ul');root.className='t root';
+  // เรียง drive จากใหญ่ -> เล็ก ให้เห็นตัวหนักก่อน
+  const drives=[...(DATA.drives||[])].sort((a,b)=>(b._aggSize||0)-(a._aggSize||0));
+  drives.forEach(d=>root.appendChild(nodeHTML(d,d.id,MAXDRIVE)));
+  const c=document.getElementById('treeview');c.innerHTML='';c.appendChild(root);
+}
 
+// ---------------- Top view ----------------
+function setView(v){
+  VIEW=v;
+  document.getElementById('v-tree').classList.toggle('on',v==='tree');
+  document.getElementById('v-top').classList.toggle('on',v==='top');
+  document.getElementById('treeview').classList.toggle('hidden',v!=='tree');
+  document.getElementById('topview').classList.toggle('hidden',v!=='top');
+  document.getElementById('q').style.display=v==='tree'?'':'none';
+  if(v==='top') renderTop();
+}
+function collectFolders(){
+  const out=[];
+  (DATA.drives||[]).forEach(d=>{
+    (function walk(n){
+      (n.children||[]).forEach(c=>{
+        if(c.type==='folder'){
+          const depth=(c.path||'').split('/').length-1; // ชั้นเทียบจากใต้ drive
+          out.push({name:c.name,path:c.path,size:c._aggSize||0,files:c._aggFiles||0,
+                    folders:c._aggFolders||0,id:c.id,driveId:d.id,depth});
+        }
+        if(c.children&&c.children.length) walk(c);
+      });
+    })(d);
+  });
+  return out;
+}
+function renderTop(){
+  if(!DATA){return;}
+  const drives=[...(DATA.drives||[])].map(d=>({name:d.name,size:d._aggSize||0,
+      files:d._aggFiles||0,folders:d._aggFolders||0,id:d.id,driveId:d.id}))
+      .sort((a,b)=>b.size-a.size);
+  const maxD=drives[0]?.size||1;
+
+  let folders=collectFolders();
+  if(TOPDEPTH!=='all'){const dep=+TOPDEPTH;folders=folders.filter(f=>f.depth===dep);}
+  folders.sort((a,b)=>b.size-a.size);
+  folders=folders.slice(0,TOPN);
+  const maxF=folders[0]?.size||1;
+
+  const driveRows=drives.map((d,i)=>`
+    <div class="trow" onclick="jumpTo('${esc(d.id)}','${esc(d.driveId)}')">
+      <div class="rk">${i+1}</div>
+      <div class="who"><div class="t">🗄️ ${esc(d.name)}</div></div>
+      <div class="tbar"><i style="width:${(d.size/maxD*100).toFixed(1)}%"></i></div>
+      <div class="tsz">${humanSize(d.size)}</div>
+      <div class="tct">${d.files.toLocaleString()} ไฟล์</div>
+    </div>`).join('');
+
+  const folderRows=folders.map((f,i)=>`
+    <div class="trow" onclick="jumpTo('${esc(f.id)}','${esc(f.driveId)}')">
+      <div class="rk">${i+1}</div>
+      <div class="who"><div class="t">📁 ${esc(f.name)}</div><div class="p">${esc(f.path)}</div></div>
+      <div class="tbar"><i style="width:${(f.size/maxF*100).toFixed(1)}%"></i></div>
+      <div class="tsz">${humanSize(f.size)}</div>
+      <div class="tct">${f.files.toLocaleString()} ไฟล์</div>
+    </div>`).join('') || `<div class="empty">ไม่มีโฟลเดอร์ในเงื่อนไขนี้</div>`;
+
+  document.getElementById('topview').innerHTML=`
+    <h3>🗄️ Shared Drives เรียงตามขนาด (${drives.length})</h3>
+    ${driveRows}
+    <h3>📁 โฟลเดอร์ใหญ่สุด</h3>
+    <div class="topctl">
+      <label>แสดง
+        <select onchange="TOPN=+this.value;renderTop()">
+          <option value="50" ${TOPN===50?'selected':''}>Top 50</option>
+          <option value="100" ${TOPN===100?'selected':''}>Top 100</option>
+          <option value="200" ${TOPN===200?'selected':''}>Top 200</option>
+        </select>
+      </label>
+      <label>ชั้น
+        <select onchange="TOPDEPTH=this.value;renderTop()">
+          <option value="all" ${TOPDEPTH==='all'?'selected':''}>ทุกชั้น</option>
+          <option value="1" ${TOPDEPTH==='1'?'selected':''}>ชั้นบนสุด (1)</option>
+          <option value="2" ${TOPDEPTH==='2'?'selected':''}>ชั้นที่ 2</option>
+        </select>
+      </label>
+      <span>คลิกแถวเพื่อกระโดดไปที่โฟลเดอร์นั้นใน Tree</span>
+    </div>
+    ${folderRows}`;
+}
+function jumpTo(id, driveId){
+  setView('tree');
+  const el=document.querySelector(`#treeview .node[data-id="${cssId(id)}"]`);
+  if(!el){return;}
+  // กางทุก ancestor ที่ยังพับอยู่
+  let cur=el.closest('li.row');
+  while(cur){
+    const ul=cur.parentElement;
+    if(ul&&ul.tagName==='UL'&&ul.classList.contains('hidden')){
+      ul.classList.remove('hidden');
+      const pli=ul.closest('li.row');
+      const tw=pli&&pli.querySelector(':scope>.node .tw'); if(tw)tw.textContent='▾';
+    }
+    cur=ul?ul.closest('li.row'):null;
+  }
+  selectNode(el, el._data);
+  if(el.scrollIntoView) el.scrollIntoView({block:'center'});
+}
+
+// ---------------- detail ----------------
 let selEl=null;
 function selectNode(el,n){if(selEl)selEl.classList.remove('sel');el.classList.add('sel');selEl=el;renderDetail(n,el._drive);}
 function roleBadge(role){const c=(getComputedStyle(document.documentElement).getPropertyValue('--r-'+role)||'#6a737d').trim();return `<span class="role" style="background:${c}">${esc(role)}</span>`;}
@@ -175,11 +343,14 @@ function roleBadge(role){const c=(getComputedStyle(document.documentElement).get
 function renderDetail(n, driveId){
   const d=document.getElementById('detail');
   let kv=`<div class="kv"><div class="k">ประเภท</div><div class="v">${n.type}</div><div class="k">Path</div><div class="v">${esc(n.path)}</div>`;
-  if(n.type!=='drive'){
+  if(n.type==='file'){
     kv+=`<div class="k">ขนาด</div><div class="v">${humanSize(n.size)}</div><div class="k">สร้างเมื่อ</div><div class="v">${fmtDate(n.createdTime)}</div><div class="k">แก้ล่าสุด</div><div class="v">${fmtDate(n.modifiedTime)}</div><div class="k">คนแก้ล่าสุด</div><div class="v">${esc(n.lastModifiedBy)||'—'}</div>`;
     if(n.webViewLink)kv+=`<div class="k">ลิงก์</div><div class="v"><a href="${esc(n.webViewLink)}" target="_blank">เปิดใน Drive ↗</a></div>`;
+  }else if(n.type==='folder'){
+    kv+=`<div class="k">ขนาดรวม</div><div class="v">${humanSize(n._aggSize)}</div><div class="k">ไฟล์ในโฟลเดอร์</div><div class="v">${(n._aggFiles||0).toLocaleString()}</div><div class="k">โฟลเดอร์ย่อย</div><div class="v">${(n._aggFolders||0).toLocaleString()}</div><div class="k">สร้างเมื่อ</div><div class="v">${fmtDate(n.createdTime)}</div><div class="k">แก้ล่าสุด</div><div class="v">${fmtDate(n.modifiedTime)}</div>`;
+    if(n.webViewLink)kv+=`<div class="k">ลิงก์</div><div class="v"><a href="${esc(n.webViewLink)}" target="_blank">เปิดใน Drive ↗</a></div>`;
   }else{
-    kv+=`<div class="k">ไฟล์ทั้งหมด</div><div class="v">${n.fileCount||0}</div><div class="k">โฟลเดอร์ย่อย</div><div class="v">${n.folderCount||0}</div><div class="k">ขนาดรวม</div><div class="v">${humanSize(n.totalSize)}</div><div class="k">สร้างเมื่อ</div><div class="v">${fmtDate(n.createdTime)}</div><div class="k">ไล่ไฟล์โดย</div><div class="v">${esc(n.crawledAs)||'—'}</div>`;
+    kv+=`<div class="k">ไฟล์ทั้งหมด</div><div class="v">${(n._aggFiles||n.fileCount||0).toLocaleString()}</div><div class="k">โฟลเดอร์ย่อย</div><div class="v">${(n._aggFolders||n.folderCount||0).toLocaleString()}</div><div class="k">ขนาดรวม</div><div class="v">${humanSize(n._aggSize||n.totalSize)}</div><div class="k">สร้างเมื่อ</div><div class="v">${fmtDate(n.createdTime)}</div><div class="k">ไล่ไฟล์โดย</div><div class="v">${esc(n.crawledAs)||'—'}</div>`;
   }
   kv+=`</div>`;
   d.innerHTML=`<h2>${icon(n.type)} ${esc(n.name)}</h2><div class="sub">${esc(n.id)}</div>${kv}<div id="perms"></div>`;
@@ -219,7 +390,7 @@ const q=document.getElementById('q');let tmr;
 q.oninput=()=>{clearTimeout(tmr);tmr=setTimeout(runSearch,180);};
 function runSearch(){
   const term=q.value.trim().toLowerCase();
-  const rows=document.querySelectorAll('#tree li.row');
+  const rows=document.querySelectorAll('#treeview li.row');
   if(!term){rows.forEach(li=>{li.classList.remove('hidden');li.querySelectorAll('.nm').forEach(x=>x.innerHTML=x.textContent);const ul=li.querySelector(':scope>ul');if(ul){ul.classList.add('hidden');const tw=li.querySelector('.tw');if(tw&&tw.textContent)tw.textContent='▸';}});return;}
   const match=li=>{
     const nm=li.querySelector(':scope>.node .nm');const name=nm.textContent.toLowerCase();
@@ -230,7 +401,7 @@ function runSearch(){
     const ul=li.querySelector(':scope>ul');if(ul){ul.classList.toggle('hidden',!childMatch);const tw=li.querySelector(':scope>.node .tw');if(tw&&tw.textContent)tw.textContent=childMatch?'▾':'▸';}
     return vis;
   };
-  document.querySelectorAll('#tree>ul.root>li.row').forEach(match);
+  document.querySelectorAll('#treeview>ul.root>li.row').forEach(match);
 }
 
 boot();
