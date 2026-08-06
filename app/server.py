@@ -17,7 +17,6 @@ from audit_service import (run_audit, STATE, export_permissions_csv,
 from gdrive_audit import (_svc_cached, list_item_permissions,
                           pick_crawl_subject, is_external, is_direct, ROLE_TH)
 from migrate_prep import build_migration_pack, PREP_STATE, ARTIFACTS
-from groups_service import run_groups_audit, GROUPS_STATE
 
 BASE = os.path.dirname(__file__)
 
@@ -220,44 +219,6 @@ def migrate_download(artifact: str):
     if not os.path.exists(path):
         raise HTTPException(404, "ยังไม่มีไฟล์ — กด Build ก่อน")
     return FileResponse(path, media_type=media, filename=fn)
-
-
-# -------------------------------------------------- Group Mail Audit
-@app.get("/api/groups/status")
-def groups_status():
-    data_path = os.path.join(CFG["out"], "groups.json")
-    return {**GROUPS_STATE, "hasData": os.path.exists(data_path)}
-
-
-@app.get("/api/groups/list")
-def groups_list():
-    path = os.path.join(CFG["out"], "groups.json")
-    if not os.path.exists(path):
-        raise HTTPException(404, "ยังไม่มีข้อมูล — กด Sync ในหน้า Group Mail ก่อน")
-    return FileResponse(path, media_type="application/json")
-
-
-@app.post("/api/groups/refresh")
-def groups_refresh(bg: BackgroundTasks):
-    if not CFG["admin"]:
-        raise HTTPException(400, "ยังไม่ตั้ง ADMIN_EMAIL ใน environment")
-    if GROUPS_STATE["running"]:
-        raise HTTPException(409, "กำลัง sync groups อยู่แล้ว")
-    bg.add_task(run_groups_audit, CFG["sa_file"], CFG["admin"],
-                CFG["domains"], CFG["out"])
-    return {"status": "started"}
-
-
-@app.get("/api/groups/export")
-def groups_export():
-    path = os.path.join(CFG["out"], "groups.xlsx")
-    if not os.path.exists(path):
-        raise HTTPException(404, "ยังไม่มีไฟล์ export — กด Sync ก่อน")
-    return FileResponse(
-        path,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename="group-mail-audit.xlsx",
-    )
 
 
 app.mount("/", StaticFiles(directory=os.path.join(BASE, "static"), html=True), name="static")
