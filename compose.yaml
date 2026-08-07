@@ -27,11 +27,12 @@ services:
         [
           {"id":"office21sun","name":"office21sun.com",
            "admin":"admin@office21sun.com",
-           "domains":"office21sun.com,sunsusolution.com"},
+           "domains":"office21sun.com,sunsusolution.com",
+           "sa_file":"/secrets/sa-21sun.json"},
           {"id":"21sunpassion","name":"21sunpassion.com",
            "admin":"admin@21sunpassion.com",
            "domains":"21sunpassion.com",
-           "sa_file":"/secrets/sa-21sun.json"}
+           "sa_file":"/secrets/sa.json"}
         ]
     mem_limit: 3g
     dns:
