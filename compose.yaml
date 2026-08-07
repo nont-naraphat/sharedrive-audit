@@ -26,10 +26,10 @@ services:
       WORKSPACES: >
         [
           {"id":"office21sun","name":"office21sun.com",
-           "admin":"admin@office21sun.com",
+           "admin":"it@office21sun.com",
            "domains":"office21sun.com,sunsusolution.com"},
           {"id":"21sunpassion","name":"21sunpassion.com",
-           "admin":"admin@21sunpassion.com",
+           "admin":"it@21sunpassion.com",
            "domains":"21sunpassion.com",
            "sa_file":"/secrets/sa-21sun.json"}
         ]
