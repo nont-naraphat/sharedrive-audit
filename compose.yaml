@@ -1,0 +1,45 @@
+services:
+  sharedrive-audit:
+    build: .
+    # image: ghcr.io/nont-naraphat/sharedrive-audit:latest
+    container_name: sharedrive-audit
+    restart: unless-stopped
+    ports:
+      - "8091:8000"
+    environment:
+      # ---- Drive audit เดิม (tenant หลัก = office21sun) : ไม่ต้องแตะ ----
+      ADMIN_EMAIL: "admin@office21sun.com"
+      INTERNAL_DOMAINS: "office21sun.com,21sunpassion.com,sunsusolution.com"
+      SA_FILE: "/secrets/sa.json"
+      OUTPUT_DIR: "/data"
+      CRAWL_CRON: "0 2 * * *"
+      RUN_ON_START: "true"
+      TZ: "Asia/Bangkok"
+      # ---- Migration Prep : ไม่ต้องแตะ ----
+      SP_SITE_BASE: "https://21sunpassion.sharepoint.com/sites"
+      TARGET_DOMAIN: "21sunpassion.com"
+      # ================= Group Mail (2 tenant) =================
+      GROUPS_CRON: "30 2 * * *"
+      GROUPS_RUN_ON_START: "false"
+      # tenant 1 (office21sun) ใช้ sa.json เดิม  |  tenant 2 (21sunpassion) ใช้ sa-21sun.json ที่จะเอามาวาง
+      # domains = โดเมน "ภายใน" ของ tenant นั้น ; โดเมนอื่นจะถูกจับเป็น external (ป้ายแดง) ไว้เป็นหลักฐาน audit
+      WORKSPACES: >
+        [
+          {"id":"office21sun","name":"office21sun.com",
+           "admin":"admin@office21sun.com",
+           "domains":"office21sun.com,sunsusolution.com"},
+          {"id":"21sunpassion","name":"21sunpassion.com",
+           "admin":"admin@21sunpassion.com",
+           "domains":"21sunpassion.com",
+           "sa_file":"/secrets/sa-21sun.json"}
+        ]
+    mem_limit: 3g
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    volumes:
+      # sa.json ของ tenant 1 (office21sun) — ตัวเดิม ไม่ต้องแตะ
+      - /volume1/docker/sharedrive-audit/secrets/sa.json:/secrets/sa.json:ro
+      # sa.json ของ tenant 2 (21sunpassion) — เอาไฟล์ที่จะให้มาวางเป็นชื่อนี้
+      - /volume1/docker/sharedrive-audit/secrets/sa-21sun.json:/secrets/sa-21sun.json:ro
+      - /volume1/docker/sharedrive-audit/data:/data
