@@ -1,0 +1,226 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Group Mail Audit</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#fff; --line:#e6e8eb; --ink:#1f2328; --mut:#6a737d;
+    --accent:#2f7d4f; --accentbg:#e8f3ec; --hover:#f0f2f4; --chip:#eef1f4;
+    --danger:#c0392b; --warnbg:#fdecea;
+    --r-OWNER:#8250df; --r-MANAGER:#0969da; --r-MEMBER:#6a737d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.45 -apple-system,Segoe UI,Roboto,"Noto Sans Thai",Arial,sans-serif;color:var(--ink);background:var(--bg)}
+  header{display:flex;align-items:center;gap:12px;padding:12px 18px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+  header h1{font-size:16px;margin:0;font-weight:650}
+  header .meta{color:var(--mut);font-size:12px}
+  header .grow{flex:1}
+  input[type=search]{border:1px solid var(--line);border-radius:8px;padding:7px 11px;width:210px;font:inherit}
+  select{border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:inherit;background:var(--panel);color:var(--ink)}
+  button{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:7px 13px;font:inherit;cursor:pointer;color:var(--ink);display:inline-flex;align-items:center;gap:6px}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button:hover{background:var(--hover)} button.primary:hover{filter:brightness(1.05)}
+  button:disabled{opacity:.55;cursor:default}
+  .spin{width:13px;height:13px;border:2px solid #fff6;border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;padding:10px 18px;align-items:center}
+  .chip{background:var(--chip);border-radius:999px;padding:4px 12px;font-size:12px;color:var(--mut)}
+  .chip b{color:var(--ink)}
+  .chip.warn{background:var(--warnbg);color:var(--danger)}
+  .wrap{display:grid;grid-template-columns:1fr 400px;height:calc(100vh - 108px)}
+  .left{overflow:auto;background:var(--panel);border-right:1px solid var(--line);padding:6px 0}
+  .detail{overflow:auto;padding:16px 18px;background:var(--bg)}
+  .grow{display:flex;flex-wrap:wrap}
+  .glist{list-style:none;margin:0;padding:0}
+  .grow-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;border-bottom:1px solid var(--line)}
+  .grow-item:hover{background:var(--hover)}.grow-item.sel{background:var(--accentbg)}
+  .grow-item .gi{font-size:16px;flex:0 0 auto}
+  .grow-item .who{min-width:0;flex:1 1 auto}
+  .grow-item .who .t{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .grow-item .who .e{font-size:11px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .grow-item .mc{font-size:12px;color:var(--mut);flex:0 0 auto;font-variant-numeric:tabular-nums;text-align:right;min-width:64px}
+  .badge{font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:999px;white-space:nowrap;flex:0 0 auto}
+  .badge.ext{background:var(--danger);color:#fff}
+  .badge.ws{background:var(--chip);color:var(--mut)}
+  .detail h2{font-size:15px;margin:0 0 4px;word-break:break-all}
+  .detail .sub{color:var(--mut);font-size:12px;word-break:break-all;margin-bottom:14px}
+  .kv{display:grid;grid-template-columns:130px 1fr;gap:6px 10px;font-size:13px;margin-bottom:18px}
+  .kv .k{color:var(--mut)}.kv .v{word-break:break-all}
+  .mtitle{font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--mut);margin:6px 0 8px;font-weight:650}
+  .mrow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .mrow .who{overflow:hidden}.mrow .who .em{overflow:hidden;text-overflow:ellipsis}
+  .mrow .who .dn{color:var(--mut);font-size:11px}
+  .role{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;color:#fff;white-space:nowrap}
+  .empty{color:var(--mut);padding:48px 18px;text-align:center}
+  .empty button{margin-top:14px}
+</style>
+
+<header>
+  <h1>📧 Group Mail Audit</h1>
+  <span class="meta" id="gen"></span>
+  <span class="grow"></span>
+  <label style="font-size:12px;color:var(--mut)">Workspace
+    <select id="wsSel" onchange="renderList()"><option value="__all">ทุก workspace</option></select>
+  </label>
+  <input type="search" id="q" placeholder="ค้นหาชื่อกลุ่ม / อีเมล…" oninput="renderList()">
+  <button id="refresh" onclick="doRefresh()"><span id="rico">🔄</span> <span id="rtxt">Sync group-mail</span></button>
+  <button class="primary" onclick="location.href='/api/groups/export'">⬇ Export Excel</button>
+  <button onclick="location.href='/'">🗂️ Drive Audit</button>
+</header>
+
+<div class="chips" id="chips"></div>
+
+<div class="wrap">
+  <div class="left"><ul class="glist" id="list"><div class="empty">กำลังโหลด…</div></ul></div>
+  <div class="detail" id="detail"><div class="empty">เลือกกลุ่มทางซ้ายเพื่อดูสมาชิกและรายละเอียด</div></div>
+</div>
+
+<script>
+let DATA=null, polling=null, SEL=null;
+const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtDate=s=>s?new Date(s).toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short'}):'—';
+const num=n=>(n||0).toLocaleString();
+
+async function boot(){ await refreshStatus(); await loadData(); }
+
+async function refreshStatus(){
+  try{
+    const s=await (await fetch('/api/groups/status')).json();
+    const btn=document.getElementById('refresh');
+    if(s.running){
+      btn.disabled=true;
+      document.getElementById('rico').outerHTML='<span class="spin" id="rico"></span>';
+      document.getElementById('rtxt').textContent=s.phase||'กำลัง sync…';
+      if(!polling) polling=setInterval(pollDone,3000);
+    }else{
+      btn.disabled=false;
+      const ic=document.getElementById('rico'); if(ic) ic.outerHTML='<span id="rico">🔄</span>';
+      document.getElementById('rtxt').textContent='Sync group-mail';
+    }
+    const g=document.getElementById('gen');
+    const sched='ซิงค์อัตโนมัติ '+cronText(s.cron);
+    const last=s.last_run?('ล่าสุด '+fmtDate(s.last_run)):'ยังไม่เคยซิงค์';
+    const next=s.next_sync?(' · ครั้งถัดไป '+fmtDate(s.next_sync)):'';
+    if(s.last_error) g.innerHTML=`<span style="color:#c0392b">ซิงค์ล่าสุด error: ${esc(s.last_error)}</span> · ${esc(sched)}`;
+    else g.innerHTML=`⏱️ ${esc(sched)} · ${esc(last)}${esc(next)}`;
+    return s;
+  }catch(e){ return {}; }
+}
+function cronText(cron){
+  if(!cron) return '';
+  const p=cron.trim().split(/\s+/);
+  if(p.length===5 && p[2]==='*' && p[3]==='*' && p[4]==='*' && /^\d+$/.test(p[0]) && /^\d+$/.test(p[1]))
+    return `ทุกวัน ${p[1].padStart(2,'0')}:${p[0].padStart(2,'0')} น.`;
+  return `(${cron})`;
+}
+async function pollDone(){ const s=await refreshStatus(); if(!s.running){ clearInterval(polling); polling=null; await loadData(); } }
+
+async function doRefresh(){
+  const r=await fetch('/api/groups/refresh',{method:'POST'});
+  if(r.status===409){ alert('กำลัง sync อยู่แล้ว'); return; }
+  if(!r.ok){ const e=await r.json().catch(()=>({})); alert('เริ่มไม่ได้: '+(e.detail||r.status)); return; }
+  await refreshStatus();
+}
+
+async function loadData(){
+  // เติม dropdown จาก config เสมอ (ต่อให้ยังไม่มีข้อมูล crawl)
+  try{
+    const ws=await (await fetch('/api/workspaces')).json();
+    const sel=document.getElementById('wsSel');
+    const cur=sel.value;
+    sel.innerHTML='<option value="__all">ทุก workspace</option>'+
+      (ws.workspaces||[]).map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('');
+    if(cur) sel.value=cur;
+  }catch(e){}
+
+  const r=await fetch('/api/groups');
+  if(!r.ok){
+    document.getElementById('list').innerHTML=
+      '<div class="empty">ยังไม่มีข้อมูล group-mail<br>กด <b>Sync group-mail</b> เพื่อดึงครั้งแรก'+
+      '<br><button class="primary" onclick="doRefresh()">🔄 Sync เลย</button></div>';
+    document.getElementById('chips').innerHTML='';
+    return;
+  }
+  DATA=await r.json();
+  renderChips(); renderList();
+}
+
+function allGroups(wsId){
+  const wss=(DATA&&DATA.workspaces)||[];
+  const pick=wsId&&wsId!=='__all'?wss.filter(w=>w.id===wsId):wss;
+  const out=[];
+  pick.forEach(w=>w.groups.forEach(g=>out.push({...g,_ws:w.name,_wsId:w.id})));
+  return out;
+}
+
+function renderChips(){
+  const wss=(DATA&&DATA.workspaces)||[];
+  const gCount=wss.reduce((a,w)=>a+w.groupCount,0);
+  const ext=wss.reduce((a,w)=>a+w.externalGroupCount,0);
+  const mem=wss.reduce((a,w)=>a+w.totalMembers,0);
+  let h=`<span class="chip"><b>${wss.length}</b> workspace</span>`+
+        `<span class="chip"><b>${num(gCount)}</b> กลุ่ม</span>`+
+        `<span class="chip"><b>${num(mem)}</b> สมาชิกรวม</span>`;
+  if(ext) h+=`<span class="chip warn">⚠️ <b>${num(ext)}</b> กลุ่มมีคนนอกองค์กร</span>`;
+  document.getElementById('chips').innerHTML=h;
+}
+
+function renderList(){
+  if(!DATA){return;}
+  const wsId=document.getElementById('wsSel').value;
+  const term=document.getElementById('q').value.trim().toLowerCase();
+  let gs=allGroups(wsId);
+  if(term) gs=gs.filter(g=>(g.name||'').toLowerCase().includes(term)||(g.email||'').toLowerCase().includes(term));
+  const showWs=wsId==='__all'&&((DATA.workspaces||[]).length>1);
+  const el=document.getElementById('list');
+  if(!gs.length){ el.innerHTML='<div class="empty">ไม่พบกลุ่มที่ตรงเงื่อนไข</div>'; return; }
+  el.innerHTML=gs.map((g,i)=>{
+    const ext=(g.externalCount>0||g.allowExternalMembers)
+      ?`<span class="badge ext">คนนอก ${g.externalCount||''}</span>`:'';
+    const wsb=showWs?`<span class="badge ws">${esc(g._ws)}</span>`:'';
+    return `<li class="grow-item" data-key="${esc(g._wsId+'|'+g.email)}" onclick='pick(${i})'>
+      <span class="gi">📧</span>
+      <span class="who"><div class="t">${esc(g.name)}</div><div class="e">${esc(g.email)}</div></span>
+      ${wsb}${ext}
+      <span class="mc">${num(g.memberCount)} คน</span>
+    </li>`;
+  }).join('');
+  el._gs=gs;
+  // คงการเลือกไว้ถ้ายังอยู่ในรายการ
+  if(SEL){ const idx=gs.findIndex(g=>g._wsId+'|'+g.email===SEL); if(idx>=0) markSel(idx); }
+}
+
+function pick(i){ const gs=document.getElementById('list')._gs; const g=gs[i]; SEL=g._wsId+'|'+g.email; markSel(i); renderDetail(g); }
+function markSel(i){
+  document.querySelectorAll('#list .grow-item').forEach(x=>x.classList.remove('sel'));
+  const rows=document.querySelectorAll('#list .grow-item'); if(rows[i]) rows[i].classList.add('sel');
+}
+function roleBadge(role){const c=(getComputedStyle(document.documentElement).getPropertyValue('--r-'+role)||'#6a737d').trim();return `<span class="role" style="background:${c}">${esc(role)}</span>`;}
+
+const SETTINGS_TH={whoCanJoin:'ใครเข้าร่วมได้',whoCanPostMessage:'ใครโพสต์ได้',whoCanViewGroup:'ใครดูกลุ่มได้',whoCanViewMembership:'ใครดูสมาชิกได้',allowExternalMembers:'อนุญาตคนนอก',membersCanPostAsTheGroup:'โพสต์ในนามกลุ่ม',isArchived:'เก็บประวัติ',archiveOnly:'เก็บอย่างเดียว',messageModerationLevel:'ระดับตรวจข้อความ'};
+
+function renderDetail(g){
+  const d=document.getElementById('detail');
+  let kv=`<div class="kv">
+    <div class="k">Workspace</div><div class="v">${esc(g._ws)}</div>
+    <div class="k">คำอธิบาย</div><div class="v">${esc(g.description)||'—'}</div>
+    <div class="k">สมาชิก</div><div class="v">${num(g.memberCount)} คน (owner ${g.roleCount.OWNER||0} · manager ${g.roleCount.MANAGER||0})</div>
+    <div class="k">คนนอกองค์กร</div><div class="v">${g.externalCount?`<span style="color:var(--danger);font-weight:600">${g.externalCount} คน</span>`:'—'}</div>
+    <div class="k">อนุญาตคนนอก</div><div class="v">${g.allowExternalMembers?'<span style="color:var(--danger);font-weight:600">ใช่</span>':'ไม่'}</div>`;
+  if((g.aliases||[]).length) kv+=`<div class="k">Alias</div><div class="v">${g.aliases.map(esc).join('<br>')}</div>`;
+  const s=g.settings||{};
+  Object.keys(s).forEach(k=>{ if(k==='allowExternalMembers')return; kv+=`<div class="k">${esc(SETTINGS_TH[k]||k)}</div><div class="v">${esc(String(s[k]))}</div>`; });
+  kv+=`</div>`;
+
+  let mh=`<div class="mtitle">สมาชิก (${g.members.length})</div>`;
+  if(!g.members.length) mh+=`<div class="sub">ไม่มีสมาชิก</div>`;
+  g.members.forEach(m=>{
+    const ext=m.external?`<span class="role" style="background:var(--danger);margin-left:4px">นอกองค์กร</span>`:'';
+    const st=m.status&&m.status!=='ACTIVE'?`<span class="role" style="background:#9a6700;margin-left:4px">${esc(m.status)}</span>`:'';
+    mh+=`<div class="mrow"><div class="who"><div class="em">${esc(m.email)}</div><div class="dn">${esc(m.typeTh)}</div></div><div>${roleBadge(m.role||'')}${st}${ext}</div></div>`;
+  });
+  d.innerHTML=`<h2>📧 ${esc(g.name)}</h2><div class="sub">${esc(g.email)}</div>${kv}${mh}`;
+}
+
+boot();
+</script>
